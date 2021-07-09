@@ -53,8 +53,10 @@ const int LM35 = A3;
 
 //Condicoes extra e variaveis de controlo
 int N = 10;  // numero de bits do arduino
+int Vs = 5;  // tensao de alimentacao
 bool overTemperature = false;
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
+String operations[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+", "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
@@ -64,7 +66,8 @@ void setup() {
     pinMode(button3, INPUT);
 
     /* Inicializacao de coisas */
-    lcd.begin(16, 2);  // inicializar lcd de 16x2
+    lcd.begin(16, 2);     // inicializar lcd de 16x2
+    irrecv.enableIRIn();  // permite receber sinais infrabermelhos
 
     /* Escrever mensagem amigável no ecrã */
     lcd.setCursor(0, 0);  // por o curso na primeira celula do display
@@ -103,11 +106,38 @@ void loop() {
         
         OBS: passos intermedios tambem podem ter mensagens no display
     */
+
+    if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
+        receberInstrucao();
+    }
 }
 
 // *************************
 // FUNCOES *****************
 // *************************
+
+void receverInstrucao() {
+    /*
+    CH-     - 16753245
+    CH      - 16736925
+    CH+     - 16769565
+    PREV-   - 16720605
+    NEXT-   - 16712445 
+    PLAY-   - 16761405
+    VOL--   - 16769055
+    VOL+    - 16754775
+    EQ      - 16748655
+    */
+    Serial.print(results.value);
+    switch (results.value) {
+        case 16753245:
+            /* code */
+            // variavel especifica
+            break;
+        default:
+            break;
+    }
+}
 
 /* Funcao do temporizador */
 /*
@@ -153,6 +183,11 @@ void startWashing(String desiredProgram) {
     // e imprimir no display mensagem quanto tempo falta
     int motorSpeed;  // velocidade do motor
     int cycleTime;   //tempo do programa
+    
+    /*!!!
+    O compilador da' erro aqui porque o switch case so' aceita numeros inteiros; nao aceita strings
+    Ja' estou 'a procura de solucao
+    */
     switch (desiredProgram) {
         case "Eco":
             motorSpeed = 10;
@@ -167,14 +202,13 @@ void startWashing(String desiredProgram) {
         case "Rapido":
             break;
     }
-
-    /* Funcao para parar o programa de lavagem*/
-    void stopWashing() {
-        // instrucoes para parar o motor
-        // e imprimir no display mensagem stopped
-        motor.setSpeed(0);
-        motor.step(0);
-    }
+}
+/* Funcao para parar o programa de lavagem*/
+void stopWashing() {
+    // instrucoes para parar o motor
+    // e imprimir no display mensagem stopped
+    motor.setSpeed(0);
+    motor.step(0);
 }
 /* Funcao para verificar o nivel de calcario */
 /* ....*/
