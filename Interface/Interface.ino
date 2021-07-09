@@ -55,8 +55,13 @@ int N = 10;  // numero de bits do arduino
 int Vs = 5;  // tensao de alimentacao
 bool overTemperature = false;
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
-String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+", "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-enum operation {"Eco","Intensivo", "Diario", "Suave","Rapido"};
+String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
+                        "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+enum operation { Eco,
+                 Intensivo,
+                 Diario,
+                 Suave,
+                 Rapido };  // enumeracao das operacoes de lavagem
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
@@ -116,8 +121,23 @@ void loop() {
 // FUNCOES *****************
 // *************************
 
-void receverInstrucao() {
+/*  COMANDO:
+    Para o comando estamos a pensar fazer a seguinte correspondencia entre
+    botao (do telecomando) e operacao (da maquina)
+    
+    { CH-, CH, CH+ } -> operacoes de manutencao: abrilhantador, ....
+    { PREV, NEXT } -> visualizar os diferentes programas
+    { PLAY/PAUSE } -> comecar e parar lavagem
+    { EQ } -> anular qualquer operacao que esteja a decorrer ou que esteja programada
+
+    botao para propriamente ligar/desligar a maquina?
+*/
+
+void receberInstrucao() {
     /*
+    Correspondecia
+    tecla   - codigo
+    -------------------
     CH-     - 16753245
     CH      - 16736925
     CH+     - 16769565
@@ -128,11 +148,27 @@ void receverInstrucao() {
     VOL+    - 16754775
     EQ      - 16748655
     */
-    Serial.print(results.value);
+    Serial.print(results.value);  //para debug
     switch (results.value) {
         case 16753245:
             /* code */
-            // variavel especifica
+            // variavel especifica; falta esta parte
+            break;
+        case 16736925:
+            break;
+        case 16769565:
+            break;
+        case 16720605:
+            break;
+        case 16712445:
+            break;
+        case 16761405:  // play
+            break;
+        case 16769055:
+            break;
+        case 16754775:
+            break;
+        case 16748655:
             break;
         default:
             break;
@@ -140,14 +176,24 @@ void receverInstrucao() {
 }
 
 /* Funcao do temporizador */
-/*
-  OBS: talvez um delay nao seja a melhor ideia -> porque vai parar tudo,
-  incluindo qualquer mensagem que esteja no display;
+/* OBS: talvez um delay nao seja a melhor ideia -> porque vai parar tudo,
+  incluindo qualquer mensagem que esteja no display, e o recetor de infravermelhos
+  (imagina que queria por um timer para 2 duas e so' pus para 1 hora; nao consigo anular)
   a solucao talvez seja esta funcao devolver um inteiro, e algures no codigo por
-  while (tempo<sleep){...}
+  while (tempo<sleep){...}, ou entao, fazer contas com a funcao millis();
+  O melhor deve ser uar o millis();
 */
 void sleep(int hours) {
-    delay(hours * 3600 * 1000);  // parar o programa x millisegundos
+    int timer = hours * 3600 * 1000;
+
+    int startingTime = millis();
+
+    while (millis() - startingTime < timer) {
+        // bloco (por agora) vazio; suficiente para ficar parado neste ciclo enquanto nao se tiver
+        // passado o tempo desejado
+        // PORMENOR: tenho que considerar o caso em que clico no comando para parar o programa
+        // SOLUCAO: por aqui dentro: if (received Play/pause) break
+    }
 }
 
 /* Funcao para selecionar um programa */
@@ -172,37 +218,50 @@ void waitForButton() {
         } else if (button3 == LOW) {
             buttonPressed = true;
         }
-
     }  // FIM while()
 
 }  // FIM waitForButton()
 
-/* Funcao para comecar o programa de lavagem*/
-void startWashing(String desiredProgram) {
+/* Funcao para comecar o programa de lavagem */
+void startWashing(operation desiredProgram) {
     // instrucoes para por o motor a funcionar
     // e imprimir no display mensagem quanto tempo falta
     int motorSpeed;  // velocidade do motor
     int cycleTime;   //tempo do programa
-    
+    int cycleTemperature;
     /*!!!
     O compilador da' erro aqui porque o switch case so' aceita numeros inteiros; nao aceita strings
     Ja' estou 'a procura de solucao
     */
     switch (desiredProgram) {
-        case "Eco":
+        case Eco:
+            cycleTime = 200;
+            cycleTemperature = 50;
+            motorSpeed = 3;
+            break;
+        case Intensivo:
+            cycleTime = 120;
+            cycleTemperature = 70;
             motorSpeed = 10;
-            cycleTime = 10;
             break;
-        case "Intensivo":
+        case Diario:
+            cycleTime = 120;
+            cycleTemperature = 65;
+            motorSpeed = 6;
             break;
-        case "Diario":
+        case Suave:
+            cycleTime = 120;
+            cycleTemperature = 65;
+            motorSpeed = 3;
             break;
-        case "Suave":
-            break;
-        case "Rapido":
+        case Rapido:
+            cycleTime = 30;
+            cycleTemperature = 65;
+            motorSpeed = 10;
             break;
     }
 }
+
 /* Funcao para parar o programa de lavagem*/
 void stopWashing() {
     // instrucoes para parar o motor
@@ -226,24 +285,41 @@ void stopWashing() {
 
   OBS: ainda nao sei se faz sentido este metodo ser void ou outra coisa
 */
-void checkTemperature(int lastCheck) {
+bool checkTemperature(int lastCheck) {
     int ADC_read = analogRead(LM35);
     int temperature = ADC_read * Vs / (pow(2, N) - 1);  // N e' o numero de bits do ADC
 
     if (temperature >= maxTemp) {
         // sobre aquecimento; parar o motor
-        overTemperature = true;  // break variable
+        return true;  // break variable is overTemperature
+    } else {
+        return false;
+    }
+}
+/* Funcao para verificar se a porta esta' aberta
+    - enquanto a porta esta' aberta, esperamos; */
+void waitForDoorClose() {
+    bool doorIsOpened = digitalRead(button1);
+    while (doorIsOpened) {
+        //esperamos ate' que seja precionado o botao que simula o fechar da porta
+        // talvez por aqui o tal if(Play.isPressed){break}
     }
 }
 
-/*  COMANDO:
-    Para o comando estamos a pensar fazer a seguinte correspondencia entre
-    botao (do telecomando) e operacao (da maquina)
-    
-    { CH-, CH, CH+ } -> operacoes de manutencao: abrilhantador, ....
-    { PREV, NEXT } -> visualizar os diferentes programas
-    { PLAY/PAUSE } -> comecar e parar lavagem
-    { EQ } -> anular qualquer operacao que esteja a decorrer ou que esteja programada
-
-    botao para propriamente ligar/desligar a maquina?
+/* Tendo em conta que ja' temos uma funcao que se chama startWashing(),
+o nome desta funcao nao e' muito feliz
+O que esta funcao faz e' passar a velocidade para o motor, e deixa-o a
+correr enquanto nao se passar o tempo de duracao do ciclo, a nao ser que
+o motor comece a sobreaquecer. Neste ultimo caso, forca a paragem.
 */
+void wash(int motorSpeed, int timer, int cycleTemperature) {
+    int startingTime = millis();  // registar o instante do inicio do programa
+
+    motor.setSpeed(motorSpeed);
+    while (millis() - startingTime < timer) {
+        overTemperature = checkTemperature;
+        if (overTemperature == true) {
+            break;
+        }
+    }
+}
