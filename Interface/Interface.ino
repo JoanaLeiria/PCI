@@ -21,7 +21,6 @@
 
 //DISPLAY----------------------
 #include <LiquidCrystal.h>  // bibioteca para o display
-LiquidCrystal lcd;
 // initialize the library by associating any needed LCD interface pin
 // with the arduino pin number it is connected to
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
@@ -56,7 +55,8 @@ int N = 10;  // numero de bits do arduino
 int Vs = 5;  // tensao de alimentacao
 bool overTemperature = false;
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
-String operations[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+", "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+", "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+enum operation {"Eco","Intensivo", "Diario", "Suave","Rapido"};
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
