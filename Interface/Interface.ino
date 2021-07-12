@@ -124,6 +124,7 @@ void loop() {
 
     if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
         receberInstrucao();
+
     }
    
    // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
@@ -146,8 +147,7 @@ void loop() {
 */
 
 void receberInstrucao() {
-    /*
-    Correspondecia
+    /* Correspondecia
     tecla   - codigo
     -------------------
     CH-     - 16753245
@@ -196,9 +196,9 @@ void receberInstrucao() {
   O melhor deve ser uar o millis();
 */
 void sleep(int hours) {
-    int timer = hours * 3600 * 1000;
+    long timer = hours * 3600 * 1000;
 
-    int startingTime = millis();
+    long startingTime = millis();
 
     while (millis() - startingTime < timer) {
         // bloco (por agora) vazio; suficiente para ficar parado neste ciclo enquanto nao se tiver
@@ -335,7 +335,7 @@ correr enquanto nao se passar o tempo de duracao do ciclo, a nao ser que
 o motor comece a sobreaquecer. Neste ultimo caso, forca a paragem.
 */
 void wash(int motorSpeed, int timer, int cycleTemperature) {
-    int startingTime = millis();  // registar o instante do inicio do programa
+    long startingTime = millis();  // registar o instante do inicio do programa
 
     motor.setSpeed(motorSpeed);
     while (millis() - startingTime < timer) {
