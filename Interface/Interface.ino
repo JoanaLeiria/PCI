@@ -49,21 +49,22 @@ int button1 = 10;
 const int LM35 = A3;
 
 //MULTIPLADOR (74HC595)
-int latchPin = 11;         // pino que define a entrada (sendo que sao 8 possiveis entradas)
-int clockPin = 12;         // pino que controla o relógio do multiplador
-int dataPin = 13;          // pino em que entram os dados 
+int latchPin = 11;  // pino que define a entrada (sendo que sao 8 possiveis entradas)
+int clockPin = 12;  // pino que controla o relógio do multiplador
+int dataPin = 13;   // pino em que entram os dados
 
 //PROGRAMAS
-byte programas = 0;    // variavel que controla que programas e funcoes extra estao on ou off
+byte programas = 0;  // variavel que controla que programas e funcoes extra estao on ou off
 // os primeiros 5 bits controlam os programas, os ultimos 3 controlam as funcoes extra
 
 //Condicoes extra e variaveis de controlo
 int N = 10;  // numero de bits do arduino
 int Vs = 5;  // tensao de alimentacao
 bool overTemperature = false;
+bool cancelOperation = false;
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
 String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
-                        "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+                      "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 enum operation { Eco,
                  Intensivo,
                  Diario,
@@ -74,10 +75,10 @@ void setup() {
     /* Comecar por definir o modo dos pinos */
     //o pino do botao e de input
     pinMode(button1, INPUT);
-   
+
     //os pinos do multiplexador sao de output
     pinMode(latchPin, OUTPUT);
-    pinMode(dataPin, OUTPUT);  
+    pinMode(dataPin, OUTPUT);
     pinMode(clockPin, OUTPUT);
 
     /* Inicializacao de coisas */
@@ -86,7 +87,9 @@ void setup() {
 
     /* Escrever mensagem amigável no ecrã */
     lcd.setCursor(0, 0);  // por o curso na primeira celula do display
-    lcd.print("Dishwasher:");
+    lcd.print("Dishwasher");
+    lcd.setCursor(0, 1);
+    lcd.print("Select operation");
 }
 
 void loop() {
@@ -124,10 +127,13 @@ void loop() {
 
     if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
         receberInstrucao();
-
+        askTimer();
+        waitForDoorClose();
+        startWashing();
+        wash();
     }
-   
-   // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
+
+    // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
 }
 
 // *************************
@@ -162,20 +168,18 @@ void receberInstrucao() {
     */
     Serial.print(results.value);  //para debug
     switch (results.value) {
-        case 16753245:
-            /* code */
-            // variavel especifica; falta esta parte
+        case 16753245:  //Eco
             break;
-        case 16736925:
+        case 16736925:  //Intenso
             break;
-        case 16769565:
+        case 16769565:  //Diario
             break;
-        case 16720605:
+        case 16720605:  //Suave
             break;
-        case 16712445:
+        case 16712445:  //Rapido
             break;
-        case 16761405:  // play
-            break;
+        //case 16761405:  // play
+        //break;
         case 16769055:
             break;
         case 16754775:
@@ -193,7 +197,7 @@ void receberInstrucao() {
   (imagina que queria por um timer para 2 duas e so' pus para 1 hora; nao consigo anular)
   a solucao talvez seja esta funcao devolver um inteiro, e algures no codigo por
   while (tempo<sleep){...}, ou entao, fazer contas com a funcao millis();
-  O melhor deve ser uar o millis();
+  O melhor deve ser usar o millis();
 */
 void sleep(int hours) {
     long timer = hours * 3600 * 1000;
@@ -205,6 +209,10 @@ void sleep(int hours) {
         // passado o tempo desejado
         // PORMENOR: tenho que considerar o caso em que clico no comando para parar o programa
         // SOLUCAO: por aqui dentro: if (received Play/pause) break
+
+        //Escrever no display quanto tempo e' que falta
+        int remaingTime = startingTime / 1000 / 60 + hours * 60 - millis() / 1000 / 60;
+        lcd.print(remaingTime);
     }
 }
 
@@ -217,9 +225,9 @@ Esta função vai servir para os 5 programas base e as 3 funções extra
 (possivel porque o multiplexer permite 8 entradas)
 */
 void selectProgram() {
-   digitalWrite(latchPin, LOW);
-   shiftOut(dataPin, clockPin, LSBFIRST, programas);
-   digitalWrite(latchPin, HIGH);
+    digitalWrite(latchPin, LOW);
+    shiftOut(dataPin, clockPin, LSBFIRST, programas);
+    digitalWrite(latchPin, HIGH);
 }
 
 /* Mensagens para o display */
@@ -233,13 +241,15 @@ void waitForButton() {
     while (!buttonPressed) {
         if (button1 == LOW) {
             buttonPressed = true;
-
-        } else if (button2 == LOW) {
+        }
+        /*
+        else if (button2 == LOW) {
             buttonPressed = true;
 
         } else if (button3 == LOW) {
             buttonPressed = true;
         }
+        */
     }  // FIM while()
 
 }  // FIM waitForButton()
@@ -251,10 +261,7 @@ void startWashing(operation desiredProgram) {
     int motorSpeed;  // velocidade do motor
     int cycleTime;   //tempo do programa
     int cycleTemperature;
-    /*!!!
-    O compilador da' erro aqui porque o switch case so' aceita numeros inteiros; nao aceita strings
-    Ja' estou 'a procura de solucao
-    */
+
     switch (desiredProgram) {
         case Eco:
             cycleTime = 200;
@@ -321,11 +328,13 @@ bool checkTemperature(int lastCheck) {
 /* Funcao para verificar se a porta esta' aberta
     - enquanto a porta esta' aberta, esperamos; */
 void waitForDoorClose() {
+    Serial.println("Door is opened. Please close it!");
     bool doorIsOpened = digitalRead(button1);
     while (doorIsOpened) {
         //esperamos ate' que seja precionado o botao que simula o fechar da porta
         // talvez por aqui o tal if(Play.isPressed){break}
     }
+    Serial.println("Door is closed");
 }
 
 /* Tendo em conta que ja' temos uma funcao que se chama startWashing(),
@@ -340,8 +349,80 @@ void wash(int motorSpeed, int timer, int cycleTemperature) {
     motor.setSpeed(motorSpeed);
     while (millis() - startingTime < timer) {
         overTemperature = checkTemperature;
+
         if (overTemperature == true) {
             break;
         }
+    }
+}
+
+boolean receivedPlayPause() {
+    if (results.value == 16761405) {
+        Serial.println("Received Play/Pause order");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void receivedCancellation() {
+    if (results.value == 16748655) {
+        Serial.println("Received Cancellation order");
+        cancelOperation = true;
+    }
+}
+
+void guardarDigito() {
+    if (recebido >= 0) {                  // se recebemos um sinal valido
+        number = 10 * number + recebido;  //...aumentamos uma ordem de grandeza ao numero que tinhamos e adicionamos o novo digito;
+        digitsCounter++;                  //... e atualizamos o contador de numeros recebidos
+    }
+}
+
+void receberNumero() {
+    // um switch case para guardar o valor recebido pelo IR receiver
+    switch (results.value) {
+        case 16738455:  // recebe 0 ;0xFFB04F
+            recebido = 0;
+            break;
+        case 16724175:  // recebe 1
+            recebido = 1;
+            break;
+        case 16718055:  // recebe 2
+            recebido = 2;
+            break;
+        case 16743045:  // recebe 3
+            recebido = 3;
+            break;
+        case 16716015:  // recebe 4
+            recebido = 4;
+            break;
+        case 16726215:  // recebe 5
+            recebido = 5;
+            break;
+        case 16734885:  // recebe 6
+            recebido = 6;
+            break;
+        case 16728765:  // recebe 7
+            recebido = 7;
+            break;
+        case 16730805:  // recebe 8
+            recebido = 8;
+            break;
+        case 16732845:  // recebe 9
+            recebido = 9;
+            break;
+        default:
+            Serial.println("Not a Number");
+            recebido = -1;
+            break;
+    }
+}
+
+void askTimer() {
+    lcd.print("Timer:");
+    while (!receivedPlayPause) {
+        receberNumero();
+        guardarDigito();
     }
 }
