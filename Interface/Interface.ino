@@ -43,8 +43,6 @@ decode_results results;    // objeto auxiliar para interpretar a tecla premida/s
 //BOTOES
 //Pinos DOS BOTOES
 int button1 = 10;
-int button2 = 11;
-int button3 = 12;
 
 //SENSOR DE TEMPERATURA
 // Pino do sensor
