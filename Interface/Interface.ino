@@ -48,6 +48,15 @@ int button1 = 10;
 // Pino do sensor
 const int LM35 = A3;
 
+//MULTIPLADOR (74HC595)
+int latchPin = 11;         // pino que define a entrada (sendo que sao 8 possiveis entradas)
+int clockPin = 12;         // pino que controla o relógio do multiplador
+int dataPin = 13;          // pino em que entram os dados 
+
+//PROGRAMAS
+byte programas = 0;    // variavel que controla que programas e funcoes extra estao on ou off
+// os primeiros 5 bits controlam os programas, os ultimos 3 controlam as funcoes extra
+
 //Condicoes extra e variaveis de controlo
 int N = 10;  // numero de bits do arduino
 int Vs = 5;  // tensao de alimentacao
@@ -63,10 +72,13 @@ enum operation { Eco,
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
-    //os pinos dos botoes sao de input
+    //o pino do botao e de input
     pinMode(button1, INPUT);
-    pinMode(button2, INPUT);
-    pinMode(button3, INPUT);
+   
+    //os pinos do multiplexador sao de output
+    pinMode(latchPin, OUTPUT);
+    pinMode(dataPin, OUTPUT);  
+    pinMode(clockPin, OUTPUT);
 
     /* Inicializacao de coisas */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
@@ -113,6 +125,8 @@ void loop() {
     if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
         receberInstrucao();
     }
+   
+   // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
 }
 
 // *************************
@@ -194,8 +208,18 @@ void sleep(int hours) {
     }
 }
 
-/* Funcao para selecionar um programa */
+/* Funcao para selecionar um programa 
+Seguindo a lógica do multiplexer, esta função coloca o latchPin em LOW, depois com a função do 
+Arduino 'shiftOut', altera o conteúdo da variável programas no registo e volta a mudar o
+latchPin para HIGH novamente
+
+Esta função vai servir para os 5 programas base e as 3 funções extra
+(possivel porque o multiplexer permite 8 entradas)
+*/
 void selectProgram() {
+   digitalWrite(latchPin, LOW);
+   shiftOut(dataPin, clockPin, LSBFIRST, programas);
+   digitalWrite(latchPin, HIGH);
 }
 
 /* Mensagens para o display */
