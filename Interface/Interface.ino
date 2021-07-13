@@ -19,8 +19,12 @@
 
 */
 
-//DISPLAY----------------------
+//Bibliotecas
 #include <LiquidCrystal.h>  // bibioteca para o display
+#include <Stepper.h>        // biblioteca para o motor de passo
+#include <IRremote.h>       // biblioteca para o recetor de infravermelhos
+
+//DISPLAY----------------------
 // initialize the library by associating any needed LCD interface pin
 // with the arduino pin number it is connected to
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
@@ -28,14 +32,13 @@ LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 //fim display ----------------------
 
 //STEPPER
-#include <Stepper.h>
 const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
 // inicializa o motor para as entradas digitais 2,3,4 e 5
-Stepper motor(stepsPerRevolution, 2, 4, 3, 5);
+const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 112, PIN_step4 = 13;
+Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
 
 //IR REMOTE
-#include <IRremote.h>      // biblioteca para o recetor de infravermelhos
 int PIN_IRrec = A3;        // pino do recetor de infravermelho
 IRrecv irrecv(PIN_IRrec);  //objeto do tipo IRrecv
 decode_results results;    // objeto auxiliar para interpretar a tecla premida/sinal recebido
@@ -84,15 +87,15 @@ void setup() {
     /* Inicializacao de coisas */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
     irrecv.enableIRIn();  // permite receber sinais infrabermelhos
+}
 
+void loop() {
     /* Escrever mensagem amigável no ecrã */
     lcd.setCursor(0, 0);  // por o curso na primeira celula do display
     lcd.print("Dishwasher");
     lcd.setCursor(0, 1);
     lcd.print("Select operation");
-}
 
-void loop() {
     /*  O fluxo e':
         1. esperar por input do comando, que pode ser:
             a. lavar ja'
@@ -122,15 +125,14 @@ void loop() {
                     2. se botao de pause clicado, parar
                 3. enviar mensagem para o display de mensagem concluida ou nao
         
-        OBS: passos intermedios tambem podem ter mensagens no display
-    */
+        OBS: passos intermedios tambem podem ter mensagens no display */
 
     if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
-        receberInstrucao();
-        askTimer();
-        waitForDoorClose();
-        startWashing();
-        wash();
+        if (receberInstrucao()) {
+            askTimer();
+            waitForDoorClose();
+            startWashing();
+        }
     }
 
     // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
@@ -152,7 +154,8 @@ void loop() {
     botao para propriamente ligar/desligar a maquina?
 */
 
-void receberInstrucao() {
+bool receberInstrucao() {
+    bool validInstruction = true;  // variavel de controlo; valor true se foi clicado um botao com uma operacao valida
     /* Correspondecia
     tecla   - codigo
     -------------------
@@ -166,6 +169,7 @@ void receberInstrucao() {
     VOL+    - 16754775
     EQ      - 16748655
     */
+
     Serial.print(results.value);  //para debug
     switch (results.value) {
         case 16753245:  //Eco
@@ -187,8 +191,11 @@ void receberInstrucao() {
         case 16748655:
             break;
         default:
+            // se recebemos uma outra tecla, instucao invalida
+            validInstruction = false;
             break;
     }
+    return validInstruction;
 }
 
 /* Funcao do temporizador */
@@ -213,6 +220,10 @@ void sleep(int hours) {
         //Escrever no display quanto tempo e' que falta
         int remaingTime = startingTime / 1000 / 60 + hours * 60 - millis() / 1000 / 60;
         lcd.print(remaingTime);
+
+        if (receivedCancellation()) {
+            break;  // se for preciso cancelar o timer, fazemos break
+        }
     }
 }
 
@@ -254,7 +265,12 @@ void waitForButton() {
 
 }  // FIM waitForButton()
 
-/* Funcao para comecar o programa de lavagem */
+/* Funcao para comecar o programa de lavagem
+Esta funcao identifica o programa de lavagem, definindo a velocidade para o motor,
+...tempo e temperatura de lavagem.
+Para de correr (para a lavagem) quando se concluir o tempo de lavagem, ou, por seguranca,
+...se o sensor de temperatura acusar sobre aquecimento
+*/
 void startWashing(operation desiredProgram) {
     // instrucoes para por o motor a funcionar
     // e imprimir no display mensagem quanto tempo falta
@@ -289,6 +305,19 @@ void startWashing(operation desiredProgram) {
             motorSpeed = 10;
             break;
     }
+
+    long startingTime = millis();  // registar o instante do inicio do programa
+    // TODO:
+    motor.setSpeed(motorSpeed);
+    while (millis() - startingTime < timer) {
+        overTemperature = checkTemperature;
+
+        if (overTemperature == true) {
+            break;
+        }
+    }
+
+
 }
 
 /* Funcao para parar o programa de lavagem*/
@@ -325,6 +354,8 @@ bool checkTemperature(int lastCheck) {
         return false;
     }
 }
+
+
 /* Funcao para verificar se a porta esta' aberta
     - enquanto a porta esta' aberta, esperamos; */
 void waitForDoorClose() {
@@ -337,25 +368,8 @@ void waitForDoorClose() {
     Serial.println("Door is closed");
 }
 
-/* Tendo em conta que ja' temos uma funcao que se chama startWashing(),
-o nome desta funcao nao e' muito feliz
-O que esta funcao faz e' passar a velocidade para o motor, e deixa-o a
-correr enquanto nao se passar o tempo de duracao do ciclo, a nao ser que
-o motor comece a sobreaquecer. Neste ultimo caso, forca a paragem.
-*/
-void wash(int motorSpeed, int timer, int cycleTemperature) {
-    long startingTime = millis();  // registar o instante do inicio do programa
 
-    motor.setSpeed(motorSpeed);
-    while (millis() - startingTime < timer) {
-        overTemperature = checkTemperature;
-
-        if (overTemperature == true) {
-            break;
-        }
-    }
-}
-
+/* Funcao especifica para saber se recebemos o botao PLAY/PAUSE */
 boolean receivedPlayPause() {
     if (results.value == 16761405) {
         Serial.println("Received Play/Pause order");
@@ -364,14 +378,18 @@ boolean receivedPlayPause() {
         return false;
     }
 }
-
+/* Funcao especifica para saber se recebemos o botao de cancelar */
 void receivedCancellation() {
     if (results.value == 16748655) {
         Serial.println("Received Cancellation order");
         cancelOperation = true;
+
+    } else {
+        cancelOperation = false;
     }
 }
 
+/* Funcao auxiliar para acumular o tempo para o temporizador */
 void guardarDigito() {
     if (recebido >= 0) {                  // se recebemos um sinal valido
         number = 10 * number + recebido;  //...aumentamos uma ordem de grandeza ao numero que tinhamos e adicionamos o novo digito;
@@ -379,6 +397,7 @@ void guardarDigito() {
     }
 }
 
+/* Funcao auxliar para receber um digito pelo telecomando */
 void receberNumero() {
     // um switch case para guardar o valor recebido pelo IR receiver
     switch (results.value) {
@@ -422,6 +441,10 @@ void receberNumero() {
 void askTimer() {
     lcd.print("Timer:");
     while (!receivedPlayPause) {
+        // pode acontecer querer cancelar a operacao; nesse caso, fazemos break
+        if (receivedCancellation()) {
+            break;
+        }
         receberNumero();
         guardarDigito();
     }
