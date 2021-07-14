@@ -31,12 +31,14 @@ const int rs = 7, en = 6, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 //fim display ----------------------
 
+/*  E PARA APAGAR, MAS VOU DEIXAR EM COMENTARIO ENQUANTO VERIFICO TUDO 
 //STEPPER
 const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
 // inicializa o motor para as entradas digitais 2,3,4 e 5
 const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
 Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
+*/
 
 //IR REMOTE
 int PIN_IRrec = A3;        // pino do recetor de infravermelho
@@ -51,14 +53,18 @@ int button1 = 10;
 // Pino do sensor
 const int LM35 = A2;
 
-//MULTIPLADOR (74HC595)
+//CIRCUITO INTEGRADO (74HC595)
 int latchPin = 11;  // pino que define a entrada (sendo que sao 8 possiveis entradas)
-int clockPin = 12;  // pino que controla o relógio do multiplador
+int clockPin = 12;  // pino que controla o relógio do multiplexador
 int dataPin = 13;   // pino em que entram os dados
 
-//PROGRAMAS
-byte programas = 0;  // variavel que controla que programas e funcoes extra estao on ou off
-// os primeiros 5 bits controlam os programas, os ultimos 3 controlam as funcoes extra
+boolean registers[8];  // vetor 1x8 em que cada valor e um boolean (HIGH/1 ou LOW/0)
+
+//STEP MOTOR
+int motorPin1 = 0;	// pin 1 da motorDriver
+int motorPin2 = 1;	// pin 2 da motorDriver
+int motorPin3 = 2;	// pin 3 da motorDriver
+int motorPin4 = 3;	// pin 4 da motorDriver
 
 //Condicoes extra e variaveis de controlo
 int N = 10;  // numero de bits do arduino
@@ -276,19 +282,6 @@ void sleep() {
     lcd.clear();  // limpamos o lcd
 }
 
-/* Funcao para selecionar um programa 
-    Seguindo a lógica do multiplexer, esta função coloca o latchPin em LOW, depois com a função do 
-    Arduino 'shiftOut', altera o conteúdo da variável programas no registo e volta a mudar o
-    latchPin para HIGH novamente
-
-    Esta função vai servir para os 5 programas base e as 3 funções extra
-    (possivel porque o multiplexer permite 8 entradas)
-*/
-void selectProgram() {
-    digitalWrite(latchPin, LOW);
-    shiftOut(dataPin, clockPin, LSBFIRST, programas);
-    digitalWrite(latchPin, HIGH);
-}
 
 /* Mensagens para o display */
 void dispMessages(String message) {
@@ -324,7 +317,7 @@ Para de correr (para a lavagem) quando se concluir o tempo de lavagem, ou, por s
 void startWashing(OPERATION desiredProgram) {
     // instrucoes para por o motor a funcionar
     // e imprimir no display mensagem quanto tempo falta
-    int motorSpeed;  // velocidade do motor
+    int motorSpeed;     // variavel que controla a velocidade do motor (que corresponde a um delay)
     int cycleTime;   //tempo do programa
     int cycleTemperature;
 
@@ -332,17 +325,20 @@ void startWashing(OPERATION desiredProgram) {
         case Eco:
             cycleTime = 200;
             cycleTemperature = 50;
-            motorSpeed = 3;
+            motorSpeed = 10;
+            setRegisterPin(4,HIGH); 
             break;
         case Intensivo:
             cycleTime = 120;
             cycleTemperature = 70;
-            motorSpeed = 10;
+            motorSpeed = 1;
+            setRegisterPin(5,HIGH); 
             break;
         case Diario:
             cycleTime = 120;
-            cycleTemperature = 65;
+            cycleTemperature = 5;
             motorSpeed = 6;
+            setRegisterPin(6,HIGH); 
             break;
         case Suave:
             cycleTime = 120;
@@ -352,18 +348,18 @@ void startWashing(OPERATION desiredProgram) {
         case Rapido:
             cycleTime = 30;
             cycleTemperature = 65;
-            motorSpeed = 10;
+            motorSpeed = 2;
+            setRegisterPin(7,HIGH); 
             break;
     }
 
+    writeRegisters(); // liga o programa escolhido (acende o LED)
+    startStepperMotor(motorSpeed);  // liga motor com a velocidade do programa selecionado
+   
     //falta por o if(irrecv.decode(&results)); comparar lado a lado com a estrutura do sleep
 
     long startingTime = millis();  // registar o instante do inicio do programa
-
-    
-
-
-    motor.setSpeed(motorSpeed);
+   
     while ((millis() - startingTime) / 1000 < cycleTime * 60) {
 
         overTemperature = checkTemperature();
@@ -516,6 +512,7 @@ int receberNumero() {
     return recebido;
 }
 
+
 /* Funcao auxiliar para acumular o tempo para o temporizador */
 void guardarDigito(int recebido) {
     if (recebido >= 0) {                // se recebemos um sinal valido
@@ -523,6 +520,8 @@ void guardarDigito(int recebido) {
         //digitsCounter++;                  //... e atualizamos o contador de numeros recebidos
     }
 }
+
+
 /* Funcao que espera input do utilizador sobre o temporizador a definir
     - Comecamos por limpar qualquer mensagem anterior do display (por causa dos padding chars),
     e passamos a mostrar a mensagem "Timer:"
@@ -564,6 +563,119 @@ void askTimer() {
     }
     irrecv.resume();
 }
+
+
+/*Funcao para colocar todos os pins do circuito integrado em LOW 
+   - usada para parar o programa que estiver a correr e desligar o motor
+*/
+
+void clearRegisters(){  
+  for(int i = 7; i >=  0; i--){
+     registers[i] = LOW;
+  }
+}
+
+
+/*Funcao para definir o valor logico de cada pin do circuito integrado
+   - vai ser usada para definir que programa ligar e para meter o motor a rodar
+*/
+
+void setRegisterPin(int index, int value){
+  registers[index] = value;
+}
+
+
+/*Funcao que envia os dados para o circuito integrado
+    - Seguindo a lógica do circuito integrado, esta função coloca o latchPin em LOW,
+    depois altera os estados lógicos de cada uma das entradas do circuito integrado,
+    usando um ciclo for de 0 a 7, e, no fim, coloca novamente o latchPin para HIGH
+    - O estado logico de cada pin e definido na funcao setRegisterPin e fica guardado
+    na variavel registers
+
+    Esta função vai servir para meter o motor a andar (na funcao startStepperMotor) 
+    e para ligar os programas da maquina
+    
+    74HC595 tem 8 pins -> 4 para o step motor + 4 para programas
+*/
+
+void writeRegisters(){
+  digitalWrite(latchPin, LOW);
+  for(int i = 7; i >=  0; i--){
+    digitalWrite(clockPin, LOW);
+    digitalWrite(dataPin, registers[i]);  // registers[i] e definido pela funcao setRegisterPin
+    digitalWrite(clockPin, HIGH);
+  }
+  digitalWrite(latchPin, HIGH);
+}
+
+
+/* Funcao que liga o motor a passo
+   - Motor anda na direcao dos ponteiros do relogio
+   - Para isso, ligamos os pinos do motor em sequencia do 4 para o 1
+   - A velocidade e controlada pelo delay (menor delay -> maior velocidade)
+   - E definida em cada programa
+*/
+
+void startStepperMotor(int motorSpeed){
+  // 1
+  setRegisterPin(motorPin4, HIGH);
+  setRegisterPin(motorPin3, LOW);
+  setRegisterPin(motorPin2, LOW);
+  setRegisterPin(motorPin1, LOW);
+  writeRegisters(); 
+  delay(motorSpeed);
+  // 2
+  setRegisterPin(motorPin4, HIGH);
+  setRegisterPin(motorPin3, HIGH);
+  setRegisterPin(motorPin2, LOW);
+  setRegisterPin(motorPin1, LOW);
+  writeRegisters(); 
+  delay (motorSpeed);
+  // 3
+  setRegisterPin(motorPin4, LOW);
+  setRegisterPin(motorPin3, HIGH);
+  setRegisterPin(motorPin2, LOW);
+  setRegisterPin(motorPin1, LOW);
+  writeRegisters(); 
+  delay(motorSpeed);
+  // 4
+  setRegisterPin(motorPin4, LOW);
+  setRegisterPin(motorPin3, HIGH);
+  setRegisterPin(motorPin2, HIGH);
+  setRegisterPin(motorPin1, LOW);
+  writeRegisters(); 
+  delay(motorSpeed);
+  // 5
+  setRegisterPin(motorPin4, LOW);
+  setRegisterPin(motorPin3, LOW);
+  setRegisterPin(motorPin2, HIGH);
+  setRegisterPin(motorPin1, LOW);
+  writeRegisters(); 
+  delay(motorSpeed);
+  // 6
+  setRegisterPin(motorPin4, LOW);
+  setRegisterPin(motorPin3, LOW);
+  setRegisterPin(motorPin2, HIGH);
+  setRegisterPin(motorPin1, HIGH);
+  writeRegisters(); 
+  delay (motorSpeed);
+  // 7
+  setRegisterPin(motorPin4, LOW);
+  setRegisterPin(motorPin3, LOW);
+  setRegisterPin(motorPin2, LOW);
+  setRegisterPin(motorPin1, HIGH);
+  writeRegisters(); 
+  delay(motorSpeed);
+  // 8
+  setRegisterPin(motorPin4, HIGH);
+  setRegisterPin(motorPin3, LOW);
+  setRegisterPin(motorPin2, LOW);
+  setRegisterPin(motorPin1, HIGH);
+  writeRegisters(); 
+  delay(motorSpeed);
+}
+
+
 
 /*
     Sons:
