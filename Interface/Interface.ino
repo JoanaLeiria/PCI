@@ -216,12 +216,13 @@ bool receberInstrucao() {
             lcd.setCursor(0, 1);
             lcd.print("Operation");
             Serial.println("Invalid Operation");
-            delay(1200);
-            lcd.clear();
+            delay(200);
             break;
     }
 
     delay(1000);
+    lcd.clear();
+
 
     return validInstruction;
 }
