@@ -14,7 +14,6 @@
 
    Codigo com base em:
     - biblioteca LiquidCrystal :
-    - biblioteca Stepper :  https://www.arduino.cc/en/reference/stepper
     - biblioteca IRremote : https://github.com/Arduino-IRremote/Arduino-IRremote
 
 */
@@ -22,7 +21,6 @@
 //Bibliotecas
 #include <IRremote.h>       // biblioteca para o recetor de infravermelhos
 #include <LiquidCrystal.h>  // bibioteca para o display
-#include <Stepper.h>        // biblioteca para o motor de passo
 
 //DISPLAY----------------------
 // initialize the library by associating any needed LCD interface pin
