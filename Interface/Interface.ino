@@ -31,15 +31,6 @@ const int rs = 7, en = 6, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 //fim display ----------------------
 
-/*  E PARA APAGAR, MAS VOU DEIXAR EM COMENTARIO ENQUANTO VERIFICO TUDO 
-//STEPPER
-const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
-// inicializa o motor para as entradas digitais 2,3,4 e 5
-const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
-Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
-//fim stepper ----------------------
-*/
-
 //IR REMOTE
 int PIN_IRrec = A3;        // pino do recetor de infravermelho
 IRrecv irrecv(PIN_IRrec);  //objeto do tipo IRrecv
@@ -339,11 +330,6 @@ void startWashing(OPERATION desiredProgram) {
             cycleTemperature = 5;
             motorSpeed = 6;
             setRegisterPin(6,HIGH); 
-            break;
-        case Suave:
-            cycleTime = 120;
-            cycleTemperature = 65;
-            motorSpeed = 3;
             break;
         case Rapido:
             cycleTime = 30;
