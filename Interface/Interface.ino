@@ -45,7 +45,7 @@ decode_results results;    // objeto auxiliar para interpretar a tecla premida/s
 
 //BOTOES
 //Pinos DOS BOTOES
-int button1 = 10;
+int button1 = 8;
 
 //SENSOR DE TEMPERATURA
 // Pino do sensor
@@ -180,14 +180,17 @@ bool receberInstrucao() {
         case 16753245:  //Eco
             desiredOperation = Eco;
             lcd.print("Eco");
+            Serial.println("Eco");
             break;
         case 16736925:  //Intenso
             desiredOperation = Intensivo;
             lcd.print("Intensivo");
+            Serial.println("Intensivo");
             break;
         case 16769565:  //Diario
             desiredOperation = Diario;
             lcd.print("Diario");
+            Serial.println("Diario");
             break;
         //case 16720605:  //Suave
         //    desiredOperation = Suave;
@@ -196,6 +199,7 @@ bool receberInstrucao() {
         case 16712445:  //Rapido
             desiredOperation = Rapido;
             lcd.print("Rapido");
+            Serial.println("Rapido");
             break;
         //case 16761405:  // play
         //break;
@@ -211,11 +215,11 @@ bool receberInstrucao() {
             lcd.print("Invalid");
             lcd.setCursor(0, 1);
             lcd.print("Operation");
+            Serial.println("Invalid Operation");
             delay(1200);
             lcd.clear();
             break;
     }
-    //Serial.println(desiredOperation);
 
     delay(1000);
 
@@ -237,7 +241,7 @@ void sleep() {
     Serial.println(timerInMillis);
     Serial.print("startingTime:");
     Serial.println(startingTime);
-    
+
     if (timer > 0) {
         delay(10000);
 
@@ -246,7 +250,6 @@ void sleep() {
     }
 
     while ((millis() - startingTime) / 1000 < timer * 60) {
-                
         /* Mostrar no display quanto tempo falta
             OBS: a maneira que podia parecer mais simples era:
             lcd.print(remainingTime / 1000);
@@ -262,7 +265,7 @@ void sleep() {
         lcd.print(String(remainingTime / 1000) + " ");
 
         Serial.print("remainingTime: ");
-        Serial.println(remainingTime/1000);
+        Serial.println(remainingTime / 1000);
 
         if (irrecv.decode(&results)) {
             if (receivedCancellation()) {
@@ -320,10 +323,9 @@ Esta funcao identifica o programa de lavagem, definindo a velocidade para o moto
 Para de correr (para a lavagem) quando se concluir o tempo de lavagem, ou, por seguranca,
 ...se o sensor de temperatura acusar sobre aquecimento. Ou ainda, se alguem cancelar a
 ...lavagem a meio.
+Envia para o display quanto tempo falta para concluir a lavagem
 */
 void startWashing(OPERATION desiredProgram) {
-    // instrucoes para por o motor a funcionar
-    // e imprimir no display mensagem quanto tempo falta
     int motorSpeed;  // velocidade do motor
     int cycleTime;   //tempo do programa
     int cycleTemperature;
@@ -344,11 +346,11 @@ void startWashing(OPERATION desiredProgram) {
             cycleTemperature = 65;
             motorSpeed = 6;
             break;
-        case Suave:
-            cycleTime = 120;
-            cycleTemperature = 65;
-            motorSpeed = 3;
-            break;
+        //case Suave:
+        //    cycleTime = 120;
+        //    cycleTemperature = 65;
+        //    motorSpeed = 3;
+        //    break;
         case Rapido:
             cycleTime = 30;
             cycleTemperature = 65;
@@ -356,18 +358,17 @@ void startWashing(OPERATION desiredProgram) {
             break;
     }
 
-    //falta por o if(irrecv.decode(&results)); comparar lado a lado com a estrutura do sleep
+    // Verificar: "ERRO" COM O remaingingTime
 
-    long startingTime = millis();  // registar o instante do inicio do programa
+    long startingTime = millis();                 // registar o instante do inicio do programa
+    long cycleInMillis = cycleTime * 60 * 1000L;  //forcar a ser um long
 
-    
-
-
-    motor.setSpeed(motorSpeed);
+    motor.setSpeed(motorSpeed);  // definimos a velocidade do motor
+    lcd.clear();
+    lcd.print("Washing...");
     while ((millis() - startingTime) / 1000 < cycleTime * 60) {
-
         overTemperature = checkTemperature();
-        
+
         /* Mostrar no display quanto tempo falta
             OBS: a maneira que podia parecer mais simples era:
             lcd.print(remainingTime / 1000);
@@ -378,26 +379,37 @@ void startWashing(OPERATION desiredProgram) {
             aquele zero que esta' a mais.
 
         */
-        long remainingTime = startingTime + cycleTime * 1000 - millis();
-        lcd.setCursor(0,1);
+        long remainingTime = startingTime + cycleInMillis - millis();
+        lcd.setCursor(0, 1);
         lcd.print(String(remainingTime / 1000) + " ");
-        
+
         Serial.print("remainingTime: ");
-        Serial.println(remainingTime/1000);
+        Serial.println(remainingTime / 1000);
 
         //Debug
         Serial.println("----");
-        Serial.print("startingTime");Serial.println(startingTime);
-
+        Serial.print("cycleTime: ");
+        Serial.println(cycleTime);
+        Serial.print("startingTime: ");
+        Serial.println(startingTime);
+        Serial.print("millis ");
+        Serial.print(millis());
+        Serial.print("remainingTime: ");
+        Serial.println(remainingTime);
+        //Serial.println(remainingTime / 1000 / 60);
 
         if (overTemperature == true) {
             break;
         }
 
-        if (receivedCancellation()) {
-            break;
+        if (irrecv.decode(&results)) {
+            if (receivedCancellation()) {
+                break;  // se for preciso cancelar o timer, fazemos break
+            }
         }
+        irrecv.resume();
     }
+    lcd.clear();
 }
 
 /* Funcao para parar o programa de lavagem*/
@@ -441,13 +453,29 @@ bool checkTemperature() {
 /* Funcao para verificar se a porta esta' aberta
     - enquanto a porta esta' aberta, esperamos; */
 void waitForDoorClose() {
-    Serial.println("Door is opened. Please close it!");
-    bool doorIsOpened = digitalRead(button1);
-    while (doorIsOpened & !receivedCancellation()) {
+    lcd.clear();
+    lcd.print("Close the door!");
+    bool doorIsClosed = digitalRead(button1);
+
+    while (!doorIsClosed) {
         //esperamos ate' que seja precionado o botao que simula o fechar da porta
-        // talvez por aqui o tal if(Play.isPressed){break}
+
+        doorIsClosed = digitalRead(button1);
+        Serial.println("----");
+        Serial.print("doorIsClosed: ");
+        Serial.println(doorIsClosed);
+
+        if (irrecv.decode(&results)) {
+            if (receivedCancellation()) {
+                break;  // se for preciso cancelar o timer, fazemos break
+            }
+        }
+        irrecv.resume();
     }
-    //Serial.println("Door is closed");
+    lcd.clear();  // limpar o display
+    if (doorIsClosed) {
+        lcd.print("Door is closed");
+    }
 }
 
 /* Funcao especifica para saber se recebemos o botao PLAY/PAUSE */

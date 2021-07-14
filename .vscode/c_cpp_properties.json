@@ -35,9 +35,9 @@
             "includePath": [
                 "D:\\Arduino\\hardware\\arduino\\avr\\cores\\arduino",
                 "D:\\Arduino\\hardware\\arduino\\avr\\variants\\standard",
-                "D:\\Arduino\\libraries\\LiquidCrystal\\src",
-                "D:\\Arduino\\libraries\\Stepper\\src",
                 "C:\\Users\\beatr\\Documents\\Arduino\\libraries\\IRremote\\src",
+                "C:\\Users\\beatr\\Documents\\Arduino\\libraries\\LiquidCrystal\\src",
+                "C:\\Users\\beatr\\Documents\\Arduino\\libraries\\Stepper\\src",
                 "d:\\arduino\\hardware\\tools\\avr\\lib\\gcc\\avr\\7.3.0\\include",
                 "d:\\arduino\\hardware\\tools\\avr\\lib\\gcc\\avr\\7.3.0\\include-fixed",
                 "d:\\arduino\\hardware\\tools\\avr\\avr\\include"
