@@ -20,21 +20,21 @@
 */
 
 //Bibliotecas
+#include <IRremote.h>       // biblioteca para o recetor de infravermelhos
 #include <LiquidCrystal.h>  // bibioteca para o display
 #include <Stepper.h>        // biblioteca para o motor de passo
-#include <IRremote.h>       // biblioteca para o recetor de infravermelhos
 
 //DISPLAY----------------------
 // initialize the library by associating any needed LCD interface pin
 // with the arduino pin number it is connected to
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+const int rs = 7, en = 6, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 //fim display ----------------------
 
 //STEPPER
 const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
 // inicializa o motor para as entradas digitais 2,3,4 e 5
-const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 112, PIN_step4 = 13;
+const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
 Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
 
@@ -49,7 +49,7 @@ int button1 = 10;
 
 //SENSOR DE TEMPERATURA
 // Pino do sensor
-const int LM35 = A3;
+const int LM35 = A2;
 
 //MULTIPLADOR (74HC595)
 int latchPin = 11;  // pino que define a entrada (sendo que sao 8 possiveis entradas)
@@ -68,11 +68,12 @@ bool cancelOperation = false;
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
 String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
                       "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-enum operation { Eco,
+enum OPERATION { Eco,
                  Intensivo,
                  Diario,
-                 Suave,
                  Rapido };  // enumeracao das operacoes de lavagem
+OPERATION desiredOperation;
+int timer = 0;
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
@@ -87,11 +88,12 @@ void setup() {
     /* Inicializacao de coisas */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
     irrecv.enableIRIn();  // permite receber sinais infrabermelhos
+    Serial.begin(9600);
 }
 
 void loop() {
     /* Escrever mensagem amigável no ecrã */
-    lcd.setCursor(0, 0);  // por o curso na primeira celula do display
+    lcd.setCursor(0, 0);  // limpa o display e poe o cursor na primeira celula
     lcd.print("Dishwasher");
     lcd.setCursor(0, 1);
     lcd.print("Select operation");
@@ -130,10 +132,12 @@ void loop() {
     if (irrecv.decode(&results)) {  // esperamos ate' que o recetor receba um sinal
         if (receberInstrucao()) {
             askTimer();
-            waitForDoorClose();
-            startWashing();
+            sleep();
+            waitForDoorClose();  // consideramos que a porta fica bloqueada durante a lavagem
+            startWashing(desiredOperation);
         }
     }
+    irrecv.resume();  // prepara o recetor para o proximo sinal
 
     // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
 }
@@ -156,6 +160,7 @@ void loop() {
 
 bool receberInstrucao() {
     bool validInstruction = true;  // variavel de controlo; valor true se foi clicado um botao com uma operacao valida
+    lcd.clear();
     /* Correspondecia
     tecla   - codigo
     -------------------
@@ -170,17 +175,27 @@ bool receberInstrucao() {
     EQ      - 16748655
     */
 
-    Serial.print(results.value);  //para debug
+    Serial.println(results.value);  //para debug
     switch (results.value) {
         case 16753245:  //Eco
+            desiredOperation = Eco;
+            lcd.print("Eco");
             break;
         case 16736925:  //Intenso
+            desiredOperation = Intensivo;
+            lcd.print("Intensivo");
             break;
         case 16769565:  //Diario
+            desiredOperation = Diario;
+            lcd.print("Diario");
             break;
-        case 16720605:  //Suave
-            break;
+        //case 16720605:  //Suave
+        //    desiredOperation = Suave;
+        //    lcd.print("Suave");
+        //    break;
         case 16712445:  //Rapido
+            desiredOperation = Rapido;
+            lcd.print("Rapido");
             break;
         //case 16761405:  // play
         //break;
@@ -193,47 +208,81 @@ bool receberInstrucao() {
         default:
             // se recebemos uma outra tecla, instucao invalida
             validInstruction = false;
+            lcd.print("Invalid");
+            lcd.setCursor(0, 1);
+            lcd.print("Operation");
+            delay(1200);
+            lcd.clear();
             break;
     }
+    //Serial.println(desiredOperation);
+
+    delay(1000);
+
     return validInstruction;
 }
 
-/* Funcao do temporizador */
-/* OBS: talvez um delay nao seja a melhor ideia -> porque vai parar tudo,
-  incluindo qualquer mensagem que esteja no display, e o recetor de infravermelhos
-  (imagina que queria por um timer para 2 duas e so' pus para 1 hora; nao consigo anular)
-  a solucao talvez seja esta funcao devolver um inteiro, e algures no codigo por
-  while (tempo<sleep){...}, ou entao, fazer contas com a funcao millis();
-  O melhor deve ser usar o millis();
+/* Funcao do temporizador
+    OBS: para o temporizador um delay nao era a melhor ideia, porque para tudo,
+    incluindo qualquer mensagem que esteja no display, e o recetor de infravermelhos
+    (imagina que queria por um timer para 2 duas mas so' pus para 1 hora; nao consigo anular)
+    A melhor solucao e' usar o millis() para saber quanto tempo ja' passou.
 */
-void sleep(int hours) {
-    long timer = hours * 3600 * 1000;
-
+void sleep() {
+    long timerInMillis = timer * 60 * 1000L;  //forcar a ser um long
     long startingTime = millis();
 
-    while (millis() - startingTime < timer) {
-        // bloco (por agora) vazio; suficiente para ficar parado neste ciclo enquanto nao se tiver
-        // passado o tempo desejado
-        // PORMENOR: tenho que considerar o caso em que clico no comando para parar o programa
-        // SOLUCAO: por aqui dentro: if (received Play/pause) break
+    Serial.println("----");
+    Serial.print("timerInMillis:");
+    Serial.println(timerInMillis);
+    Serial.print("startingTime:");
+    Serial.println(startingTime);
+    
+    if (timer > 0) {
+        delay(10000);
 
-        //Escrever no display quanto tempo e' que falta
-        int remaingTime = startingTime / 1000 / 60 + hours * 60 - millis() / 1000 / 60;
-        lcd.print(remaingTime);
-
-        if (receivedCancellation()) {
-            break;  // se for preciso cancelar o timer, fazemos break
-        }
+        lcd.clear();
+        lcd.print("Starting in");
     }
+
+    while ((millis() - startingTime) / 1000 < timer * 60) {
+                
+        /* Mostrar no display quanto tempo falta
+            OBS: a maneira que podia parecer mais simples era:
+            lcd.print(remainingTime / 1000);
+            mas, esta maneira tinha uma problema que e' sempre que o tempo restante baixava de uma
+            unidade de grandeza, ficava erradamente um zero a mais.
+            Por exemplo: 102, 101, 100, 900, 890, 880 (ficava um zero a mais erradamente)
+            A solucao implementada foi por isso enviar uma String com um padding space que vai apagar
+            aquele zero que esta' a mais.
+
+        */
+        long remainingTime = startingTime + timerInMillis - millis();
+        lcd.setCursor(0, 1);
+        lcd.print(String(remainingTime / 1000) + " ");
+
+        Serial.print("remainingTime: ");
+        Serial.println(remainingTime/1000);
+
+        if (irrecv.decode(&results)) {
+            if (receivedCancellation()) {
+                break;  // se for preciso cancelar o timer, fazemos break
+            }
+        }
+        irrecv.resume();
+    }
+    timer = 0;  // fazer reset do temporizador
+
+    lcd.clear();  // limpamos o lcd
 }
 
 /* Funcao para selecionar um programa 
-Seguindo a lógica do multiplexer, esta função coloca o latchPin em LOW, depois com a função do 
-Arduino 'shiftOut', altera o conteúdo da variável programas no registo e volta a mudar o
-latchPin para HIGH novamente
+    Seguindo a lógica do multiplexer, esta função coloca o latchPin em LOW, depois com a função do 
+    Arduino 'shiftOut', altera o conteúdo da variável programas no registo e volta a mudar o
+    latchPin para HIGH novamente
 
-Esta função vai servir para os 5 programas base e as 3 funções extra
-(possivel porque o multiplexer permite 8 entradas)
+    Esta função vai servir para os 5 programas base e as 3 funções extra
+    (possivel porque o multiplexer permite 8 entradas)
 */
 void selectProgram() {
     digitalWrite(latchPin, LOW);
@@ -245,7 +294,7 @@ void selectProgram() {
 void dispMessages(String message) {
 }
 
-/* Funcao que espera que se clique num botao*/
+/* Funcao que espera que se clique num botao */
 void waitForButton() {
     bool buttonPressed = false;  // variavel de controlo; valor false enquanto nenhum botao e' premido
 
@@ -269,9 +318,10 @@ void waitForButton() {
 Esta funcao identifica o programa de lavagem, definindo a velocidade para o motor,
 ...tempo e temperatura de lavagem.
 Para de correr (para a lavagem) quando se concluir o tempo de lavagem, ou, por seguranca,
-...se o sensor de temperatura acusar sobre aquecimento
+...se o sensor de temperatura acusar sobre aquecimento. Ou ainda, se alguem cancelar a
+...lavagem a meio.
 */
-void startWashing(operation desiredProgram) {
+void startWashing(OPERATION desiredProgram) {
     // instrucoes para por o motor a funcionar
     // e imprimir no display mensagem quanto tempo falta
     int motorSpeed;  // velocidade do motor
@@ -306,18 +356,48 @@ void startWashing(operation desiredProgram) {
             break;
     }
 
+    //falta por o if(irrecv.decode(&results)); comparar lado a lado com a estrutura do sleep
+
     long startingTime = millis();  // registar o instante do inicio do programa
-    // TODO:
+
+    
+
+
     motor.setSpeed(motorSpeed);
-    while (millis() - startingTime < timer) {
-        overTemperature = checkTemperature;
+    while ((millis() - startingTime) / 1000 < cycleTime * 60) {
+
+        overTemperature = checkTemperature();
+        
+        /* Mostrar no display quanto tempo falta
+            OBS: a maneira que podia parecer mais simples era:
+            lcd.print(remainingTime / 1000);
+            mas, esta maneira tinha uma problema que e' sempre que o tempo restante baixava de uma
+            unidade de grandeza, ficava erradamente um zero a mais.
+            Por exemplo: 102, 101, 100, 900, 890, 880 (ficava um zero a mais erradamente)
+            A solucao implementada foi por isso enviar uma String com um padding space que vai apagar
+            aquele zero que esta' a mais.
+
+        */
+        long remainingTime = startingTime + cycleTime * 1000 - millis();
+        lcd.setCursor(0,1);
+        lcd.print(String(remainingTime / 1000) + " ");
+        
+        Serial.print("remainingTime: ");
+        Serial.println(remainingTime/1000);
+
+        //Debug
+        Serial.println("----");
+        Serial.print("startingTime");Serial.println(startingTime);
+
 
         if (overTemperature == true) {
             break;
         }
+
+        if (receivedCancellation()) {
+            break;
+        }
     }
-
-
 }
 
 /* Funcao para parar o programa de lavagem*/
@@ -343,9 +423,12 @@ void stopWashing() {
 
   OBS: ainda nao sei se faz sentido este metodo ser void ou outra coisa
 */
-bool checkTemperature(int lastCheck) {
+bool checkTemperature() {
     int ADC_read = analogRead(LM35);
     int temperature = ADC_read * Vs / (pow(2, N) - 1);  // N e' o numero de bits do ADC
+    Serial.println("-----");
+    Serial.print("Temperature: ");
+    Serial.println(temperature);
 
     if (temperature >= maxTemp) {
         // sobre aquecimento; parar o motor
@@ -355,22 +438,20 @@ bool checkTemperature(int lastCheck) {
     }
 }
 
-
 /* Funcao para verificar se a porta esta' aberta
     - enquanto a porta esta' aberta, esperamos; */
 void waitForDoorClose() {
     Serial.println("Door is opened. Please close it!");
     bool doorIsOpened = digitalRead(button1);
-    while (doorIsOpened) {
+    while (doorIsOpened & !receivedCancellation()) {
         //esperamos ate' que seja precionado o botao que simula o fechar da porta
         // talvez por aqui o tal if(Play.isPressed){break}
     }
-    Serial.println("Door is closed");
+    //Serial.println("Door is closed");
 }
 
-
 /* Funcao especifica para saber se recebemos o botao PLAY/PAUSE */
-boolean receivedPlayPause() {
+bool receivedPlayPause() {
     if (results.value == 16761405) {
         Serial.println("Received Play/Pause order");
         return true;
@@ -379,26 +460,22 @@ boolean receivedPlayPause() {
     }
 }
 /* Funcao especifica para saber se recebemos o botao de cancelar */
-void receivedCancellation() {
+bool receivedCancellation() {
     if (results.value == 16748655) {
         Serial.println("Received Cancellation order");
+        lcd.clear();
+        lcd.print("Cancelled");
+        delay(1000);
         cancelOperation = true;
-
     } else {
         cancelOperation = false;
     }
-}
-
-/* Funcao auxiliar para acumular o tempo para o temporizador */
-void guardarDigito() {
-    if (recebido >= 0) {                  // se recebemos um sinal valido
-        number = 10 * number + recebido;  //...aumentamos uma ordem de grandeza ao numero que tinhamos e adicionamos o novo digito;
-        digitsCounter++;                  //... e atualizamos o contador de numeros recebidos
-    }
+    return cancelOperation;
 }
 
 /* Funcao auxliar para receber um digito pelo telecomando */
-void receberNumero() {
+int receberNumero() {
+    int recebido;  // variavel que guarda o numero recebido
     // um switch case para guardar o valor recebido pelo IR receiver
     switch (results.value) {
         case 16738455:  // recebe 0 ;0xFFB04F
@@ -436,16 +513,60 @@ void receberNumero() {
             recebido = -1;
             break;
     }
+    return recebido;
 }
 
-void askTimer() {
-    lcd.print("Timer:");
-    while (!receivedPlayPause) {
-        // pode acontecer querer cancelar a operacao; nesse caso, fazemos break
-        if (receivedCancellation()) {
-            break;
-        }
-        receberNumero();
-        guardarDigito();
+/* Funcao auxiliar para acumular o tempo para o temporizador */
+void guardarDigito(int recebido) {
+    if (recebido >= 0) {                // se recebemos um sinal valido
+        timer = 10 * timer + recebido;  //...aumentamos uma ordem de grandeza ao numero que tinhamos e adicionamos o novo digito;
+        //digitsCounter++;                  //... e atualizamos o contador de numeros recebidos
     }
 }
+/* Funcao que espera input do utilizador sobre o temporizador a definir
+    - Comecamos por limpar qualquer mensagem anterior do display (por causa dos padding chars),
+    e passamos a mostrar a mensagem "Timer:"
+    - Esperamos que o utilizador uso o telecomando para enviar o temporizador desejado
+    - Tem ainda em atencao que o utilizador pode querer anular a operacao; nesse caso faz break
+*/
+void askTimer() {
+    lcd.clear();  // apagar qualquer mensagem anterior no display (por causa dos padding chars)
+    lcd.print("Timer:");
+
+    irrecv.resume();  // prepara o sensor para receber o proximo sinal
+
+    while (true) {  // while true
+        if (irrecv.decode(&results)) {
+            //while (!receivedPlayPause) {
+            // pode acontecer querer cancelar a operacao; nesse caso, fazemos break
+            if (receivedCancellation()) {
+                timer = 0;  // fazer reset do temporizador
+                break;
+            }
+            if (receivedPlayPause()) {
+                break;
+            }
+            int recebido = receberNumero();
+            guardarDigito(recebido);
+            // falta aparecer no display o nosso input
+            lcd.setCursor(0, 1);
+            lcd.print(timer);
+            Serial.println("----------");
+            Serial.print("results.value: ");
+            Serial.println(results.value);
+            Serial.print("recebido: ");
+            Serial.println(recebido);
+            Serial.print("timer: ");
+            Serial.println(timer);
+
+            irrecv.resume();  // prepara o sensor para receber o proximo sinal
+        }
+    }
+    irrecv.resume();
+}
+
+/*
+    Sons:
+    - bip curto ao fim da lavagem completa
+    - bip longo em casos de erro
+*/
