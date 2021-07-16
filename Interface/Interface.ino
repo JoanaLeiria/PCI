@@ -679,6 +679,7 @@ void verifyDescaling{
       lcd.print("Falta de sal");
       lcd.setCursor(0, 1);
       lcd.print("Desligar e repor");
+      delay(2000);
    }
    
    
