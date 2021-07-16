@@ -90,6 +90,9 @@ void loop() {
     /* Escrever mensagem amigável no ecrã */
     lcd.setCursor(0, 0);  // limpa o display e poe o cursor na primeira celula
     lcd.print("Dishwasher");
+   
+    verifyDescaling();  // verifica os niveis de descalcificacao
+   
     lcd.setCursor(0, 1);
     lcd.print("Select operation");
 
@@ -659,6 +662,29 @@ void startStepperMotor(int motorSpeed){
   delay(motorSpeed);
 }
 
+
+/* Funcao para verificar se e preciso meter sal amaciador
+   - Retira-se um numero aleatorio de 0 a 100, se for igual a 50 temos de repor o sal
+   - Para repor o sal, enviamos mensagem pelo lcd para o utilizador desligar a camara e repor o sal, consoante
+   o nivel da dureza da agua que utiliza
+   - Esta funcao e utilizada no inicio do loop
+*/
+
+void verifyDescaling{
+   
+   int x = random(100);
+   
+   if ( x == 50 ){
+      lcd.clear();  // apagar qualquer mensagem anterior no display (por causa dos padding chars)
+      lcd.print("Falta de sal");
+      lcd.setCursor(0, 1);
+      lcd.print("Desligar e repor");
+   }
+   
+   
+}
+
+   
 
 
 /*
