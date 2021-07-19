@@ -1,15 +1,19 @@
 /* Projeto - Grupo 3D - Joana Leiria, Jorge Silva - Maquina Lavar loica
 
-   DESCRICAO:
-   Este scipt funciona para um projeto de uma maquina de lavar loica.
-   Temos:
-   - 1 botao (porta 10) para o utilizador dar input: fechar a porta
+    DESCRICAO:
+    Este scipt funciona para um projeto de uma maquina de lavar loica.
+    Com este script conseguimos simular as funcoes basicas de uma maquina de lavar loiça.
+    Assim, conseguimos selecionar um dos programas de lavagem, por um temporizador,
+    e simular aspetos como o fechar da porta, o verificar dos niveis de descalcificacao,
+    rodar um motor e verificar a sua temperatura.
+    
+    Ao nivel das portas temos:
    - 1 display (portas 2 a 7) para fazer output de mensagens ao utlizador
-   - 1 motor (ligado por meio de um circuito integrado; portas 11 a 13) para a maquina
-   - X LEDs (portas ...)
+   - 1 botao (porta 8) para o utilizador dar input: fechar a porta
+   - 1 LED (porta 9)
+   - 1 motor (portas 10 a 13) para a maquina
    - 1 sensor de temperatura (porta A2)
    - 1 sensor de infravermelhos (porta A3)
-   - ...
 
 
    Codigo com base em:
@@ -42,9 +46,9 @@ int PIN_IRrec = A3;        // pino do recetor de infravermelho
 IRrecv irrecv(PIN_IRrec);  //objeto do tipo IRrecv
 decode_results results;    // objeto auxiliar para interpretar a tecla premida/sinal recebido
 
-//BOTOES----------------------
-//Pinos DOS BOTOES
+//BOTOES e LEDS----------------------
 int buttonDoor = 8;
+int LED = 9;
 
 //SENSOR DE TEMPERATURA--------
 // Pino do sensor
@@ -71,8 +75,10 @@ int timer = 0;  // variavel que guarda o tempo para o temporizador
 
 void setup() {
     /* Comecar por definir o modo dos pinos */
-    //o pino do botao e' de input
     pinMode(buttonDoor, INPUT);
+    pinMode(LED, OUTPUT);
+    digitalWrite(LED,LOW); // apagar o led
+
 
     /* Inicializacao de objetos */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
@@ -135,7 +141,6 @@ void loop() {
     }
     irrecv.resume();  // prepara o recetor para o proximo sinal
 
-    // para selecionar o programa -> programas(0) -> selecionarPrograma() -> bitSet(programa, inteiro com o numero do programa) -> selecionarPrograma()
 }
 
 // *************************
@@ -143,7 +148,7 @@ void loop() {
 // *************************
 
 /*  COMANDO:
-    Para o comando estamos a pensar fazer a seguinte correspondencia entre
+    Para o comando vamos fazer a seguinte correspondencia entre
     botao (do telecomando) e operacao (da maquina)
     
     { CH-, CH, CH+ } -> operacoes de manutencao: abrilhantador, ....
@@ -312,7 +317,7 @@ void startWashing(OPERATION desiredProgram) {
     }
 
     long startingTime = millis();                 // registar o instante do inicio do programa
-    long cycleInMillis = cycleTime * 60 * 1000L;  //forcar a ser um long
+    long cycleInSeconds = cycleTime * 60;  //forcar a ser um long
 
     lcd.clear();
     lcd.print("Washing...");
@@ -332,11 +337,10 @@ void startWashing(OPERATION desiredProgram) {
             aquele zero que esta' a mais.
 
         */
-        long remainingTime = startingTime + cycleInMillis - millis();
+        long remainingTime = startingTime/1000 + cycleInSeconds - millis()/1000;
         lcd.setCursor(0, 1);
-        //lcd.print(String(remainingTime / 1000) + " ");
-        long hours = remainingTime / (1000 * 60 * 60);
-        long minutes = remainingTime / (1000 * 60);
+        int hours = remainingTime / (3600);
+        int minutes = remainingTime/60 - hours*60;
         lcd.print(String(hours) + ":" + String(minutes) + " ");  // com padding zeros
         motor.step(100);
 
@@ -370,7 +374,6 @@ void startWashing(OPERATION desiredProgram) {
 }
 
 /* Funcao com instrucoes para parar o programa de lavagem*/
-
 void stopWashing() {
     motor.setSpeed(0);
     motor.step(0);
@@ -542,6 +545,12 @@ void askTimer() {
     }
     irrecv.resume();
 }
+/* Funcao para verificar se e preciso meter sal amaciador
+   - Retira-se um numero aleatorio de 0 a 100, se for igual a 50 temos de repor o sal
+   - Para repor o sal, enviamos mensagem pelo lcd para o utilizador desligar a camara e repor o sal, consoante
+   o nivel da dureza da agua que utiliza
+   - Esta funcao e utilizada no inicio do loop
+*/
 void verifyDescaling() {
     long x = random(100);
     Serial.println(x);
@@ -555,11 +564,3 @@ void verifyDescaling() {
     }
 }
 
-/* Funcao para verificar o nivel de calcario */
-/* ....*/
-
-/* Rascunho - passar mensagem dos segundos para um formato melhor (hh:mm)
-int hours = timeLeftInMillis/(1000*60*60);
-int minutes = timeLeftInMillis/(1000*60);
-lcd.print(hours+":"+minutes+" "); // com padding zeros
-*/
