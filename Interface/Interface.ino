@@ -6,7 +6,7 @@
     Assim, conseguimos selecionar um dos programas de lavagem, por um temporizador,
     e simular aspetos como o fechar da porta, o verificar dos niveis de descalcificacao,
     rodar um motor e verificar a sua temperatura.
-    
+
     Ao nivel das portas temos:
    - 1 display (portas 2 a 7) para fazer output de mensagens ao utlizador
    - 1 botao (porta 8) para o utilizador dar input: fechar a porta
@@ -360,6 +360,7 @@ void startWashing(OPERATION desiredProgram) {
         if (overTemperature == true) {
             lcd.clear();
             lcd.write("Sobreaquecimento");
+            digitalWrite(LED,HIGH); // Acender o LED como forma de aviso
             delay(10000);
             break;
         }
