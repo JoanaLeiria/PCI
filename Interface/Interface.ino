@@ -21,16 +21,7 @@
 //Bibliotecas
 #include <IRremote.h>       // biblioteca para o recetor de infravermelhos
 #include <LiquidCrystal.h>  // bibioteca para o display
-
-/* Acho que deviamos de usar o motor simples; sem o circuito integrado
 #include <Stepper.h>        // biblioteca para o motor de passo
-//STEPPER
-const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
-// inicializa o motor para as entradas digitais 2,3,4 e 5
-const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
-Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
-//fim stepper ----------------------
-*/
 
 //DISPLAY----------------------
 // initialize the library by associating any needed LCD interface pin
@@ -38,6 +29,13 @@ Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 const int rs = 7, en = 6, d5 = 5, d4 = 4, d3 = 3, d2 = 2;
 LiquidCrystal lcd(rs, en, d5, d4, d3, d2);
 //fim display -----------------
+
+//STEPPER
+const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
+// inicializa o motor para as entradas digitais 2,3,4 e 5
+const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
+Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
+//fim stepper ----------------------
 
 //IR REMOTE--------------------
 int PIN_IRrec = A3;        // pino do recetor de infravermelho
@@ -52,19 +50,6 @@ int buttonDoor = 8;
 // Pino do sensor
 const int LM35 = A2;
 
-//CIRCUITO INTEGRADO (74HC595)---
-int latchPin = 11;  // pino que define a entrada (sendo que sao 8 possiveis entradas)
-int clockPin = 12;  // pino que controla o relógio do multiplexador
-int dataPin = 13;   // pino em que entram os dados
-
-boolean registers[8];  // vetor 1x8 em que cada valor e um boolean (HIGH/1 ou LOW/0)
-
-//STEP MOTOR----------------------
-int motorPin1 = 0;  // pin 1 da motorDriver
-int motorPin2 = 1;  // pin 2 da motorDriver
-int motorPin3 = 2;  // pin 3 da motorDriver
-int motorPin4 = 3;  // pin 4 da motorDriver
-
 //Condicoes extra e variaveis de controlo
 int N = 10;                    // numero de bits do arduino
 int Vs = 5;                    // tensao de alimentacao
@@ -78,6 +63,7 @@ enum OPERATION {
     Eco,
     Intensivo,
     Diario,
+    MeiaCarga,
     Rapido
 };  // enumeracao das operacoes de lavagem
 OPERATION desiredOperation;
@@ -87,11 +73,6 @@ void setup() {
     /* Comecar por definir o modo dos pinos */
     //o pino do botao e' de input
     pinMode(buttonDoor, INPUT);
-
-    //os pinos do multiplexador sao de output
-    pinMode(latchPin, OUTPUT);
-    pinMode(dataPin, OUTPUT);
-    pinMode(clockPin, OUTPUT);
 
     /* Inicializacao de objetos */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
@@ -203,16 +184,14 @@ bool receberInstrucao() {
             desiredOperation = Diario;
             lcd.print("Diario");
             break;
-        //case 16720605:  //Suave
-        //    desiredOperation = Suave;
-        //    lcd.print("Suave");
-        //    break;
+        case 16720605:  //Meia carga
+            desiredOperation = MeiaCarga;
+            lcd.print("Meia Carga");
+            break;
         case 16712445:  //Rapido
             desiredOperation = Rapido;
             lcd.print("Rapido");
             break;
-        //case 16761405:  // play
-        //break;
         case 16769055:
             break;
         case 16754775:
@@ -229,7 +208,6 @@ bool receberInstrucao() {
             lcd.clear();
             break;
     }
-    //Serial.println(desiredOperation);
 
     delay(1000);
 
@@ -293,26 +271,6 @@ void sleep() {
 void dispMessages(String message) {
 }
 
-/* Funcao que espera que se clique num botao */
-void waitForButton() {
-    bool buttonPressed = false;  // variavel de controlo; valor false enquanto nenhum botao e' premido
-
-    while (!buttonPressed) {
-        if (buttonDoor == LOW) {
-            buttonPressed = true;
-        }
-        /*
-        else if (button2 == LOW) {
-            buttonPressed = true;
-
-        } else if (button3 == LOW) {
-            buttonPressed = true;
-        }
-        */
-    }  // FIM while()
-
-}  // FIM waitForButton()
-
 /* Funcao para comecar o programa de lavagem
 Esta funcao identifica o programa de lavagem, definindo a velocidade para o motor,
 ...tempo e temperatura de lavagem.
@@ -331,30 +289,27 @@ void startWashing(OPERATION desiredProgram) {
             cycleTime = 200;
             cycleTemperature = 50;
             motorSpeed = 60;
-            setRegisterPin(4, HIGH);
             break;
         case Intensivo:
             cycleTime = 120;
             cycleTemperature = 70;
             motorSpeed = 200;
-            setRegisterPin(5, HIGH);
             break;
         case Diario:
             cycleTime = 120;
-            cycleTemperature = 5;
+            cycleTemperature = 50;
             motorSpeed = 120;
-            setRegisterPin(6, HIGH);
             break;
+        case MeiaCarga:
+            cycleTime = 100;
+            cycleTemperature = 50;
+            motorSpeed = 120;
         case Rapido:
             cycleTime = 30;
             cycleTemperature = 65;
             motorSpeed = 200;
-            setRegisterPin(7, HIGH);
             break;
     }
-
-    //writeRegisters();               // liga o programa escolhido (acende o LED)
-    //startStepperMotor(motorSpeed);  // liga motor com a velocidade do programa selecionado
 
     long startingTime = millis();                 // registar o instante do inicio do programa
     long cycleInMillis = cycleTime * 60 * 1000L;  //forcar a ser um long
@@ -362,8 +317,7 @@ void startWashing(OPERATION desiredProgram) {
     lcd.clear();
     lcd.print("Washing...");
 
-    
-    //motor.setSpeed(motorSpeed);  // definimos a velocidade do motor
+    motor.setSpeed(motorSpeed);  // definimos a velocidade do motor
 
     while ((millis() - startingTime) / 1000 < cycleTime * 60) {
         overTemperature = checkTemperature();
@@ -380,14 +334,11 @@ void startWashing(OPERATION desiredProgram) {
         */
         long remainingTime = startingTime + cycleInMillis - millis();
         lcd.setCursor(0, 1);
-        lcd.print(String(remainingTime / 1000) + " ");
-
-        Serial.print("remainingTime: ");
-        Serial.println(remainingTime / 1000);
-
-        //startStepperMotor(motorSpeed);  // liga motor com a velocidade do programa selecionado
-        //motor.step(100);
-
+        //lcd.print(String(remainingTime / 1000) + " ");
+        long hours = remainingTime / (1000 * 60 * 60);
+        long minutes = remainingTime / (1000 * 60);
+        lcd.print(String(hours) + ":" + String(minutes) + " ");  // com padding zeros
+        motor.step(100);
 
         //Debug
         Serial.println("----");
@@ -399,8 +350,13 @@ void startWashing(OPERATION desiredProgram) {
         Serial.print(millis());
         Serial.print("remainingTime: ");
         Serial.println(remainingTime);
+        Serial.print("hours"); Serial.println(hours);
+        Serial.print("minutes"); Serial.println(minutes);
 
         if (overTemperature == true) {
+            lcd.clear();
+            lcd.write("Sobreaquecimento");
+            delay(10000);
             break;
         }
 
@@ -414,13 +370,11 @@ void startWashing(OPERATION desiredProgram) {
 }
 
 /* Funcao com instrucoes para parar o programa de lavagem*/
-// !!!!ADAPTAR PARA O CIRCUITO INTEGRADO
-/*
+
 void stopWashing() {
     motor.setSpeed(0);
     motor.step(0);
 }
-*/
 
 /* Funcao para verificar a temperatura
 Lemos o estado da porta ligada ao sensor de temperatura atraves
@@ -588,121 +542,6 @@ void askTimer() {
     }
     irrecv.resume();
 }
-
-/*Funcao para colocar todos os pins do circuito integrado em LOW 
-   - usada para parar o programa que estiver a correr e desligar o motor
-*/
-
-void clearRegisters() {
-    for (int i = 7; i >= 0; i--) {
-        registers[i] = LOW;
-    }
-}
-
-/*Funcao para definir o valor logico de cada pin do circuito integrado
-   - vai ser usada para definir que programa ligar e para meter o motor a rodar
-*/
-
-void setRegisterPin(int index, int value) {
-    registers[index] = value;
-}
-
-/*Funcao que envia os dados para o circuito integrado
-    - Seguindo a lógica do circuito integrado, esta função coloca o latchPin em LOW,
-    depois altera os estados lógicos de cada uma das entradas do circuito integrado,
-    usando um ciclo for de 0 a 7, e, no fim, coloca novamente o latchPin para HIGH
-    - O estado logico de cada pin e definido na funcao setRegisterPin e fica guardado
-    na variavel registers
-
-    Esta função vai servir para meter o motor a andar (na funcao startStepperMotor) 
-    e para ligar os programas da maquina
-    
-    74HC595 tem 8 pins -> 4 para o step motor + 4 para programas
-*/
-
-void writeRegisters() {
-    digitalWrite(latchPin, LOW);
-    for (int i = 7; i >= 0; i--) {
-        digitalWrite(clockPin, LOW);
-        digitalWrite(dataPin, registers[i]);  // registers[i] e definido pela funcao setRegisterPin
-        digitalWrite(clockPin, HIGH);
-    }
-    digitalWrite(latchPin, HIGH);
-}
-
-/* Funcao que liga o motor a passo
-   - Motor anda na direcao dos ponteiros do relogio
-   - Para isso, ligamos os pinos do motor em sequencia do 4 para o 1
-   - A velocidade e controlada pelo delay (menor delay -> maior velocidade)
-   - E definida em cada programa
-*/
-
-void startStepperMotor(int motorSpeed) {
-    // 1
-    setRegisterPin(motorPin4, HIGH);
-    setRegisterPin(motorPin3, LOW);
-    setRegisterPin(motorPin2, LOW);
-    setRegisterPin(motorPin1, LOW);
-    writeRegisters();
-    delay(motorSpeed);
-    // 2
-    setRegisterPin(motorPin4, HIGH);
-    setRegisterPin(motorPin3, HIGH);
-    setRegisterPin(motorPin2, LOW);
-    setRegisterPin(motorPin1, LOW);
-    writeRegisters();
-    delay(motorSpeed);
-    // 3
-    setRegisterPin(motorPin4, LOW);
-    setRegisterPin(motorPin3, HIGH);
-    setRegisterPin(motorPin2, LOW);
-    setRegisterPin(motorPin1, LOW);
-    writeRegisters();
-    delay(motorSpeed);
-    // 4
-    setRegisterPin(motorPin4, LOW);
-    setRegisterPin(motorPin3, HIGH);
-    setRegisterPin(motorPin2, HIGH);
-    setRegisterPin(motorPin1, LOW);
-    writeRegisters();
-    delay(motorSpeed);
-    // 5
-    setRegisterPin(motorPin4, LOW);
-    setRegisterPin(motorPin3, LOW);
-    setRegisterPin(motorPin2, HIGH);
-    setRegisterPin(motorPin1, LOW);
-    writeRegisters();
-    delay(motorSpeed);
-    // 6
-    setRegisterPin(motorPin4, LOW);
-    setRegisterPin(motorPin3, LOW);
-    setRegisterPin(motorPin2, HIGH);
-    setRegisterPin(motorPin1, HIGH);
-    writeRegisters();
-    delay(motorSpeed);
-    // 7
-    setRegisterPin(motorPin4, LOW);
-    setRegisterPin(motorPin3, LOW);
-    setRegisterPin(motorPin2, LOW);
-    setRegisterPin(motorPin1, HIGH);
-    writeRegisters();
-    delay(motorSpeed);
-    // 8
-    setRegisterPin(motorPin4, HIGH);
-    setRegisterPin(motorPin3, LOW);
-    setRegisterPin(motorPin2, LOW);
-    setRegisterPin(motorPin1, HIGH);
-    writeRegisters();
-    delay(motorSpeed);
-}
-
-/* Funcao para verificar se e preciso meter sal amaciador
-   - Retira-se um numero aleatorio de 0 a 100, se for igual a 50 temos de repor o sal
-   - Para repor o sal, enviamos mensagem pelo lcd para o utilizador desligar a camara e repor o sal, consoante
-   o nivel da dureza da agua que utiliza
-   - Esta funcao e utilizada no inicio do loop
-*/
-
 void verifyDescaling() {
     long x = random(100);
     Serial.println(x);
