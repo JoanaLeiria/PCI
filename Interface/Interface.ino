@@ -58,8 +58,9 @@ int motorPin4 = 3;  // pin 4 da motorDriver
 //Condicoes extra e variaveis de controlo
 int N = 10;  // numero de bits do arduino
 int Vs = 5;  // tensao de alimentacao
-bool overTemperature = false;
-bool cancelOperation = false;
+bool overTemperature = false;   // variavel bool com o estado da temperatura
+bool cancelOperation = false;   // variavel bool com o cancelamento de operacao
+bool lowSalt = false;   // variavel bool com o nivel de sal
 const int maxTemp = 80;  // temperatura maxima: 80 ºC
 //String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
 //                      "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
@@ -86,15 +87,17 @@ void setup() {
     lcd.begin(16, 2);     // inicializar lcd de 16x2
     irrecv.enableIRIn();  // permite receber sinais infrabermelhos
     Serial.begin(9600);   // permite comunicacao com o computador
+
+    verifyDescaling();  // verifica os niveis de descalcificacao
+    if (lowSalt==true){
+        exit(0);
+    }
 }
 
 void loop() {
     /* Escrever mensagem amigável no ecrã */
     lcd.setCursor(0, 0);  // limpa o display e poe o cursor na primeira celula
     lcd.print("Dishwasher");
-
-    verifyDescaling();  // verifica os niveis de descalcificacao
-
     lcd.setCursor(0, 1);
     lcd.print("Select operation");
 
@@ -398,31 +401,22 @@ void stopWashing() {
     motor.step(0);
 }
 */
-/* Funcao para verificar o nivel de calcario */
-/* ....*/
 
-/* Funcao para verificar a temperatura */
-/* 2 opcoes:
-  verificamos se esta' a uma temperatura maior do que uma pre-definida
-  ... ou 
-  verificamos se aumentou muito desde a ultima vez que verificámos:
-  - se sim, e' melhor aumentar a taxa com que medimos a temperatura
-  - se nao, podemos baixar
-
-- variavel delta_t;
-- ou entao, se for do tipo temperatura=0.8*maxTemp, repetir leitura 
-
-  OBS: ainda nao sei se faz sentido este metodo ser void ou outra coisa
+/* Funcao para verificar a temperatura
+Lemos o estado da porta ligada ao sensor de temperatura atraves
+... da funcao analogRead(). Pela datasheet do sensor, convetermos
+... o estado da porta para um valor de temperatura.
+Comparamos esse valor com um valor de referencia de temperatura maxima.
 */
 bool checkTemperature() {
     int ADC_read = analogRead(LM35);
-    int temperature = ADC_read * Vs / (pow(2, N) - 1);  // N e' o numero de bits do ADC
+    int temperature = ADC_read * Vs / (pow(2, N) - 1) / 0.01;  // N e' o numero de bits do ADC
     Serial.println("-----");
     Serial.print("Temperature: ");
     Serial.println(temperature);
 
     if (temperature >= maxTemp) {
-        // sobre aquecimento; parar o motor
+        // sobreaquecimento; parar o motor
         return true;  // break variable is overTemperature
     } else {
         return false;
@@ -452,11 +446,11 @@ void waitForDoorClose() {
             }
             irrecv.resume();
         }
-        lcd.clear();  // limpar o display
         if (doorIsClosed) {
             lcd.print("Door is closed");
         }
     }
+    lcd.clear(); // limpar o ecra
 }
 
 /* Funcao especifica para saber se recebemos o botao PLAY/PAUSE */
@@ -691,12 +685,16 @@ void startStepperMotor(int motorSpeed) {
 
 void verifyDescaling() {
     long x = random(100);
-
+    Serial.println(x);
     if (x == 50) {
         lcd.clear();  // apagar qualquer mensagem anterior no display (por causa dos padding chars)
         lcd.print("Falta de sal");
         lcd.setCursor(0, 1);
         lcd.print("Desligar e repor");
         delay(2000);
+        lowSalt=true;
     }
 }
+
+/* Funcao para verificar o nivel de calcario */
+/* ....*/
