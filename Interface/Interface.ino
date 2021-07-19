@@ -42,27 +42,25 @@ Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
 
 //IR REMOTE--------------------
-int PIN_IRrec = A3;        // pino do recetor de infravermelho
+const int PIN_IRrec = A3;        // pino do recetor de infravermelho
 IRrecv irrecv(PIN_IRrec);  //objeto do tipo IRrecv
 decode_results results;    // objeto auxiliar para interpretar a tecla premida/sinal recebido
 
 //BOTOES e LEDS----------------------
-int buttonDoor = 8;
-int LED = 9;
+const int buttonDoor = 8;
+const int LED = 9;
 
 //SENSOR DE TEMPERATURA--------
 // Pino do sensor
 const int LM35 = A2;
 
 //Condicoes extra e variaveis de controlo
-int N = 10;                    // numero de bits do arduino
-int Vs = 5;                    // tensao de alimentacao
+const int N = 10;                    // numero de bits do arduino
+const int Vs = 5;                    // tensao de alimentacao
 bool overTemperature = false;  // variavel bool com o estado da temperatura
 bool cancelOperation = false;  // variavel bool com o cancelamento de operacao
 bool lowSalt = false;          // variavel bool com o nivel de sal
 const int maxTemp = 80;        // temperatura maxima: 80 ºC
-//String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
-//                      "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 enum OPERATION {
     Eco,
     Intensivo,
