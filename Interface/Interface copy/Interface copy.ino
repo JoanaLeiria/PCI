@@ -22,7 +22,7 @@
 #include <IRremote.h>       // biblioteca para o recetor de infravermelhos
 #include <LiquidCrystal.h>  // bibioteca para o display
 
-/* Acho que deviamos de usar o motor simples; sem o circuito integrado
+/* Acho que deviamos de usar o motor simples; sem o circuito integrado */
 #include <Stepper.h>        // biblioteca para o motor de passo
 //STEPPER
 const int stepsPerRevolution = 100;  // change this to fit the number of steps per revolution for your motor 2038
@@ -30,7 +30,7 @@ const int stepsPerRevolution = 100;  // change this to fit the number of steps p
 const int PIN_step1 = 10, PIN_step2 = 11, PIN_step3 = 12, PIN_step4 = 13;
 Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
-*/
+/**/
 
 //DISPLAY----------------------
 // initialize the library by associating any needed LCD interface pin
@@ -362,8 +362,7 @@ void startWashing(OPERATION desiredProgram) {
     lcd.clear();
     lcd.print("Washing...");
 
-    
-    //motor.setSpeed(motorSpeed);  // definimos a velocidade do motor
+    motor.setSpeed(motorSpeed);  // definimos a velocidade do motor
 
     while ((millis() - startingTime) / 1000 < cycleTime * 60) {
         overTemperature = checkTemperature();
@@ -382,11 +381,13 @@ void startWashing(OPERATION desiredProgram) {
         lcd.setCursor(0, 1);
         lcd.print(String(remainingTime / 1000) + " ");
 
+        motor.step(100);
+        //startStepperMotor(motorSpeed);  // liga motor com a velocidade do programa selecionado
+
         Serial.print("remainingTime: ");
         Serial.println(remainingTime / 1000);
 
-        //startStepperMotor(motorSpeed);  // liga motor com a velocidade do programa selecionado
-        //motor.step(100);
+        
 
 
         //Debug
