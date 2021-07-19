@@ -56,12 +56,12 @@ int motorPin3 = 2;  // pin 3 da motorDriver
 int motorPin4 = 3;  // pin 4 da motorDriver
 
 //Condicoes extra e variaveis de controlo
-int N = 10;  // numero de bits do arduino
-int Vs = 5;  // tensao de alimentacao
-bool overTemperature = false;   // variavel bool com o estado da temperatura
-bool cancelOperation = false;   // variavel bool com o cancelamento de operacao
-bool lowSalt = false;   // variavel bool com o nivel de sal
-const int maxTemp = 80;  // temperatura maxima: 80 ºC
+int N = 10;                    // numero de bits do arduino
+int Vs = 5;                    // tensao de alimentacao
+bool overTemperature = false;  // variavel bool com o estado da temperatura
+bool cancelOperation = false;  // variavel bool com o cancelamento de operacao
+bool lowSalt = false;          // variavel bool com o nivel de sal
+const int maxTemp = 80;        // temperatura maxima: 80 ºC
 //String buttons[21] = {"CH-", "CH", "CH+", "VOL-", "VOL+", "PLAY/PAUSE", "VOL-", "VOL+",
 //                      "EQ", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 enum OPERATION {
@@ -89,7 +89,7 @@ void setup() {
     Serial.begin(9600);   // permite comunicacao com o computador
 
     verifyDescaling();  // verifica os niveis de descalcificacao
-    if (lowSalt==true){
+    if (lowSalt == true) {
         exit(0);
     }
 }
@@ -387,9 +387,12 @@ void startWashing(OPERATION desiredProgram) {
             break;
         }
 
-        if (receivedCancellation()) {
-            break;
+        if (irrecv.decode(&results)) {
+            if (receivedCancellation()) {
+                break;  // se for preciso cancelar o timer, fazemos break
+            }
         }
+        irrecv.resume();
     }
 }
 
@@ -450,7 +453,7 @@ void waitForDoorClose() {
             lcd.print("Door is closed");
         }
     }
-    lcd.clear(); // limpar o ecra
+    lcd.clear();  // limpar o ecra
 }
 
 /* Funcao especifica para saber se recebemos o botao PLAY/PAUSE */
@@ -692,9 +695,15 @@ void verifyDescaling() {
         lcd.setCursor(0, 1);
         lcd.print("Desligar e repor");
         delay(2000);
-        lowSalt=true;
+        lowSalt = true;
     }
 }
 
 /* Funcao para verificar o nivel de calcario */
 /* ....*/
+
+/* Rascunho - passar mensagem dos segundos para um formato melhor (hh:mm)
+int hours = timeLeftInMillis/(1000*60*60);
+int minutes = timeLeftInMillis/(1000*60);
+lcd.print(hours+":"+minutes+" "); // com padding zeros
+*/
