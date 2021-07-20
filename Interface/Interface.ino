@@ -149,11 +149,9 @@ void loop() {
     Para o comando vamos fazer a seguinte correspondencia entre
     botao (do telecomando) e operacao (da maquina)
     
-    { CH-, CH, CH+ } -> operacoes de manutencao: abrilhantador, ....
-    { PREV, NEXT } -> visualizar os diferentes programas
+    { CH-, CH, CH+, PREV} -> selecionar os diferentes programas
     { PLAY/PAUSE } -> comecar e parar lavagem
     { EQ } -> anular qualquer operacao que esteja a decorrer ou que esteja programada
-
 */
 
 bool receberInstrucao() {
@@ -165,10 +163,10 @@ bool receberInstrucao() {
     CH-     - 16753245
     CH      - 16736925
     CH+     - 16769565
-    PREV-   - 16720605
-    NEXT-   - 16712445 
-    PLAY-   - 16761405
-    VOL--   - 16769055
+    PREV    - 16720605
+    NEXT    - 16712445 
+    PLAY    - 16761405
+    VOL-    - 16769055
     VOL+    - 16754775
     EQ      - 16748655
     */
@@ -187,19 +185,13 @@ bool receberInstrucao() {
             desiredOperation = Diario;
             lcd.print("Diario");
             break;
-        case 16720605:  //Meia carga
-            desiredOperation = MeiaCarga;
-            lcd.print("Meia Carga");
-            break;
-        case 16712445:  //Rapido
+        case 16720605:  //Rapido
             desiredOperation = Rapido;
             lcd.print("Rapido");
             break;
-        case 16769055:
-            break;
-        case 16754775:
-            break;
-        case 16748655:
+        case 16712445:  //Meia carga
+            desiredOperation = MeiaCarga;
+            lcd.print("Meia Carga");
             break;
         default:
             // se recebemos uma outra tecla, instucao invalida
@@ -220,7 +212,7 @@ bool receberInstrucao() {
 /* Funcao do temporizador
     OBS: para o temporizador um delay nao era a melhor ideia, porque para tudo,
     incluindo qualquer mensagem que esteja no display, e o recetor de infravermelhos
-    (imagina que queria por um timer para 2 duas mas so' pus para 1 hora; nao consigo anular)
+    (imagina que queria por um timer para 2 duas mas so' pus para 1 hora; nao conseguiria anular)
     A melhor solucao e' usar o millis() para saber quanto tempo ja' passou.
 */
 void sleep() {
