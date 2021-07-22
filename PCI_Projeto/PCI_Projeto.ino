@@ -42,7 +42,7 @@ Stepper motor(stepsPerRevolution, PIN_step1, PIN_step3, PIN_step2, PIN_step4);
 //fim stepper ----------------------
 
 //IR REMOTE--------------------
-const int PIN_IRrec = A3;        // pino do recetor de infravermelho
+const int PIN_IRrec = A3;  // pino do recetor de infravermelho
 IRrecv irrecv(PIN_IRrec);  //objeto do tipo IRrecv
 decode_results results;    // objeto auxiliar para interpretar a tecla premida/sinal recebido
 
@@ -55,11 +55,12 @@ const int LED = 9;
 const int LM35 = A2;
 
 //Condicoes extra e variaveis de controlo
-const int N = 10;                    // numero de bits do arduino
-const int Vs = 5;                    // tensao de alimentacao
+const int N = 10;              // numero de bits do arduino
+const int Vs = 5;              // tensao de alimentacao
 bool overTemperature = false;  // variavel bool com o estado da temperatura
 bool cancelOperation = false;  // variavel bool com o cancelamento de operacao
 bool lowSalt = false;          // variavel bool com o nivel de sal
+bool meiaCarga = false;        // variavel bool com a opcao de Meia Carga
 const int maxTemp = 80;        // temperatura maxima: 80 ºC
 enum OPERATION {
     Eco,
@@ -75,8 +76,7 @@ void setup() {
     /* Comecar por definir o modo dos pinos */
     pinMode(buttonDoor, INPUT);
     pinMode(LED, OUTPUT);
-    digitalWrite(LED,LOW); // apagar o led
-
+    digitalWrite(LED, LOW);  // apagar o led
 
     /* Inicializacao de objetos */
     lcd.begin(16, 2);     // inicializar lcd de 16x2
@@ -138,7 +138,6 @@ void loop() {
         }
     }
     irrecv.resume();  // prepara o recetor para o proximo sinal
-
 }
 
 // *************************
@@ -189,9 +188,12 @@ bool receberInstrucao() {
             desiredOperation = Rapido;
             lcd.print("Rapido");
             break;
-        case 16712445:  //Meia carga
+        case 16712445:  //Meia Carga
+            Serial.println("Received Meia Carga");
             desiredOperation = MeiaCarga;
             lcd.print("Meia Carga");
+            meiaCarga = true;          // mudo o estado da variavel de meia carga para true;
+            validInstruction = false;  // meto o validInstrucion a false para voltar a pedir um programa;
             break;
         default:
             // se recebemos uma outra tecla, instucao invalida
@@ -295,10 +297,6 @@ void startWashing(OPERATION desiredProgram) {
             cycleTemperature = 50;
             motorSpeed = 120;
             break;
-        case MeiaCarga:
-            cycleTime = 100;
-            cycleTemperature = 50;
-            motorSpeed = 120;
         case Rapido:
             cycleTime = 30;
             cycleTemperature = 65;
@@ -306,7 +304,13 @@ void startWashing(OPERATION desiredProgram) {
             break;
     }
 
-    long startingTime = millis();                 // registar o instante do inicio do programa
+    // Se tiver sido selecionada a opcao de meia carga, entao reduzimos o tempo do ciclo para metade
+    if (meiaCarga == true) {
+        cycleTime = cycleTime / 2;
+    }
+    meiaCarga = false;  // e podemos fazer ja' o reset da variavel de meia carga
+
+    long startingTime = millis();          // registar o instante do inicio do programa
     long cycleInSeconds = cycleTime * 60;  //forcar a ser um long
 
     lcd.clear();
@@ -327,10 +331,10 @@ void startWashing(OPERATION desiredProgram) {
             aquele zero que esta' a mais.
 
         */
-        long remainingTime = startingTime/1000 + cycleInSeconds - millis()/1000;
+        long remainingTime = startingTime / 1000 + cycleInSeconds - millis() / 1000;
         lcd.setCursor(0, 1);
         int hours = remainingTime / (3600);
-        int minutes = remainingTime/60 - hours*60;
+        int minutes = remainingTime / 60 - hours * 60;
         lcd.print(String(hours) + ":" + String(minutes) + " ");  // com padding zeros
         motor.step(100);
 
@@ -344,13 +348,15 @@ void startWashing(OPERATION desiredProgram) {
         Serial.print(millis());
         Serial.print("remainingTime: ");
         Serial.println(remainingTime);
-        Serial.print("hours"); Serial.println(hours);
-        Serial.print("minutes"); Serial.println(minutes);
+        Serial.print("hours");
+        Serial.println(hours);
+        Serial.print("minutes");
+        Serial.println(minutes);
 
         if (overTemperature == true) {
             lcd.clear();
             lcd.write("Sobreaquecimento");
-            digitalWrite(LED,HIGH); // Acender o LED como forma de aviso
+            digitalWrite(LED, HIGH);  // Acender o LED como forma de aviso
             delay(10000);
             break;
         }
@@ -430,6 +436,7 @@ bool receivedPlayPause() {
         return false;
     }
 }
+
 /* Funcao especifica para saber se recebemos o botao de cancelar */
 bool receivedCancellation() {
     if (results.value == 16748655) {
@@ -554,4 +561,3 @@ void verifyDescaling() {
         lowSalt = true;
     }
 }
-
